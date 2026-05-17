@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.0...v0.1.1) (2026-05-17)
+
+
+### Features
+
+* add max-dev-build-link-core-win (align with Maya/Blender) ([de06a52](https://github.com/loonghao/dcc-mcp-3dsmax/commit/de06a521352862aba5bcabe08905c80bef3db281))
+* align with dcc-mcp-core 0.17.2 API (add diagnostics/execution options) ([2d220ad](https://github.com/loonghao/dcc-mcp-3dsmax/commit/2d220ad00fe4c85168764af3ca32372774b8557e))
+* initial 3ds max adapter ([e3f2175](https://github.com/loonghao/dcc-mcp-3dsmax/commit/e3f2175a5faa124b74f9bf0d37d29bed9be4a034))
+
 ## [0.1.0] - 2026-05-16
 
 ### Added
