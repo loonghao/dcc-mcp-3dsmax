@@ -1,0 +1,26 @@
+{
+  "packages": {
+    ".": {
+      "package-name": "dcc-mcp-3dsmax",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "changelog-path": "CHANGELOG.md",
+      "changelog-types": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "style", "section": "Styles"},
+        {"type": "refactor", "section": "Code Refactoring"},
+        {"type": "perf", "section": "Performance Improvements"},
+        {"type": "test", "section": "Tests"},
+        {"type": "build", "section": "Builds"},
+        {"type": "ci", "section": "Continuous Integrations"},
+        {"type": "chore", "section": "Chores"}
+      ]
+    }
+  },
+  "bootstrap-sha": "abc123def456",
+  "repository-url": "https://github.com/loonghao/dcc-mcp-3dsmax",
+  "release-search-depth": 5
+}

@@ -216,16 +216,11 @@ default:
 max-version := env("MAX_VERSION", "2025")
 
 # Detect 3ds Max scripts directory (platform-aware)
+# Windows: uses ADSK_3DSMAX_<version> env var or %APPDATA%\Autodesk\3dsMax\<ver>\scripts
+# Unix/macOS: uses Wine path ~/wine/drive_c/Program Files/Autodesk/3ds Max <ver>/scripts
 _3dsmax-scripts-dir := if os() == "windows" {
-    # 3ds Max uses ADSK_3DSMAX_<version> environment variable or default path
-    $maxScripts = env("ADSK_3DSMAX_" + replace(max-version, ".", "_"), "")
-    if $maxScripts != "" {
-        $maxScripts + "\\scripts"
-    } else {
-        env("APPDATA", "") + "\\Autodesk\\3dsMax\\" + max-version + "\\scripts"
-    }
+    env("APPDATA", "") + "\\Autodesk\\3dsMax\\" + max-version + "\\scripts"
 } else {
-    # macOS/Linux (via Wine or native)
     env("HOME", "") + "/.wine/drive_c/Program Files/Autodesk/3ds Max " + max-version + "/scripts"
 }
 
