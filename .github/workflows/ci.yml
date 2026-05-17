@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
@@ -24,24 +25,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
-          pip install pytest pytest-cov pytest-mock
+          python -m pip install -e ".[dev]"
 
-      - name: Lint with flake8
-        run: |
-          pip install flake8
-          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-      - name: Type check with mypy (optional)
-        run: |
-          pip install mypy
-          mypy src/ --ignore-missing-imports || true
-        continue-on-error: true
+      - name: Lint with ruff
+        run: python -m ruff check src tests packaging --select E9,F63,F7,F82
 
       - name: Test with pytest
-        run: |
-          pytest tests/ -v --cov=src/dcc_mcp_3dsmax --cov-report=term-missing
+        run: python -m pytest
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
@@ -62,17 +52,15 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          python -m pip install build twine
 
       - name: Build package
-        run: |
-          python -m build
+        run: python -m build
 
       - name: Check package
-        run: |
-          twine check dist/*
+        run: python -m twine check dist/*
 
-  lint-precommit:
+  build-mzp:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,9 +70,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install pre-commit
-        run: |
-          python -m pip install pre-commit
+      - name: Build drag-and-drop MZP
+        run: python packaging/assemble_mzp.py --version 0.1.0 --output dist/mzp --project-root .
 
-      - name: Run pre-commit
-        uses: pre-commit/action@v3.0.1
+      - name: Upload MZP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mzp
+          path: dist/mzp/*.mzp

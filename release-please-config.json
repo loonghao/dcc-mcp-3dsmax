@@ -1,26 +1,38 @@
 {
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "python",
+  "include-v-in-tag": true,
   "packages": {
     ".": {
       "package-name": "dcc-mcp-3dsmax",
+      "include-component-in-tag": false,
       "release-type": "python",
+      "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
-      "changelog-path": "CHANGELOG.md",
-      "changelog-types": [
-        {"type": "feat", "section": "Features"},
-        {"type": "fix", "section": "Bug Fixes"},
-        {"type": "docs", "section": "Documentation"},
-        {"type": "style", "section": "Styles"},
-        {"type": "refactor", "section": "Code Refactoring"},
-        {"type": "perf", "section": "Performance Improvements"},
-        {"type": "test", "section": "Tests"},
-        {"type": "build", "section": "Builds"},
-        {"type": "ci", "section": "Continuous Integrations"},
-        {"type": "chore", "section": "Chores"}
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
+        {
+          "type": "generic",
+          "path": "src/dcc_mcp_3dsmax/__version__.py"
+        }
       ]
     }
   },
-  "bootstrap-sha": "abc123def456",
-  "repository-url": "https://github.com/loonghao/dcc-mcp-3dsmax",
-  "release-search-depth": 5
+  "changelog-sections": [
+    {"type": "feat", "section": "Features", "hidden": false},
+    {"type": "fix", "section": "Bug Fixes", "hidden": false},
+    {"type": "perf", "section": "Performance Improvements", "hidden": false},
+    {"type": "refactor", "section": "Code Refactoring", "hidden": false},
+    {"type": "docs", "section": "Documentation", "hidden": false},
+    {"type": "style", "section": "Styles", "hidden": true},
+    {"type": "chore", "section": "Miscellaneous Chores", "hidden": true},
+    {"type": "test", "section": "Tests", "hidden": true},
+    {"type": "ci", "section": "Continuous Integration", "hidden": true},
+    {"type": "build", "section": "Build System", "hidden": true}
+  ]
 }
