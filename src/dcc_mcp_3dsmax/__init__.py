@@ -7,8 +7,8 @@ required.
 Quickstart (inside 3ds Max's MAXScript Listener):
 
     import dcc_mcp_3dsmax
-    handle = dcc_mcp_3dsmax.start_server(port=8765)
-    # MCP host connects to http://127.0.0.1:8765/mcp
+    handle = dcc_mcp_3dsmax.start_server()
+    # MCP host connects to http://127.0.0.1:9765/mcp
     handle.shutdown()
 
 Skill authoring helpers (for 3ds Max skills developers):
@@ -41,8 +41,8 @@ from dcc_mcp_3dsmax._env import (
     resolve_execute_python_disabled,
 )
 from dcc_mcp_3dsmax._version_probe import (
-    get_3dsmax_version_string,
     get_3dsmax_version_number,
+    get_3dsmax_version_string,
     is_3dsmax_available,
 )
 from dcc_mcp_3dsmax.api import (
@@ -66,12 +66,16 @@ from dcc_mcp_3dsmax.capabilities import (
     get_3dsmax_capabilities,
     get_3dsmax_capabilities_dict,
 )
+from dcc_mcp_3dsmax.max_bootstrap import start_sidecar_bridge, stop_sidecar_bridge
+from dcc_mcp_3dsmax.menu import install_menu, install_shutdown_callback
 from dcc_mcp_3dsmax.server import (
+    DEFAULT_GATEWAY_PORT,
     DEFAULT_PORT,
+    SERVER_NAME,
     MaxMcpServer,
     MaxServerOptions,
-    SERVER_NAME,
     get_server,
+    prepare_server,
     start_server,
     stop_server,
 )
@@ -84,8 +88,14 @@ __all__ = [
     "start_server",
     "stop_server",
     "get_server",
+    "prepare_server",
+    "DEFAULT_GATEWAY_PORT",
     "DEFAULT_PORT",
     "SERVER_NAME",
+    "start_sidecar_bridge",
+    "stop_sidecar_bridge",
+    "install_menu",
+    "install_shutdown_callback",
     # Version
     "get_3dsmax_version_string",
     "get_3dsmax_version_number",

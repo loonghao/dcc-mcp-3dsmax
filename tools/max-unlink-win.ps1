@@ -1,6 +1,6 @@
 # max-unlink-win.ps1
 # Remove dev symlinks from 3ds Max's scripts directory
-# Usage: just max-unlink-win  or  powershell -File tools/max-unlink-win.ps1 -MaxVersion 2025
+# Usage: just max-unlink-win  or  powershell -File tools/max-unlink-win.ps1 -MaxVersion 2024
 
 param(
     [string]$MaxVersion = $env:MAX_VERSION
@@ -8,7 +8,7 @@ param(
 
 # Default 3ds Max version
 if ([string]::IsNullOrEmpty($MaxVersion)) {
-    $MaxVersion = "2025"
+    $MaxVersion = "2024"
 }
 
 # Detect 3ds Max scripts directory

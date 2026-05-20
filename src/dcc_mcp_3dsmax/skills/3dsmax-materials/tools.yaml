@@ -1,0 +1,82 @@
+tools:
+  - name: create_standard_material
+    description: >-
+      Create a Standard material in the current 3ds Max scene. Use when the
+      user asks for a simple diffuse/specular material. Returns material name,
+      diffuse color, specular color, and glossiness.
+    source_file: action_create_standard_material.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          default: StandardMat
+          description: Name for the new material.
+        diffuse:
+          type: array
+          minItems: 3
+          maxItems: 3
+          description: Diffuse RGB color components from 0 to 255.
+          items:
+            type: number
+            minimum: 0
+            maximum: 255
+        specular:
+          type: array
+          minItems: 3
+          maxItems: 3
+          description: Specular RGB color components from 0 to 255.
+          items:
+            type: number
+            minimum: 0
+            maximum: 255
+        glossiness:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 10.0
+          description: Standard material glossiness value.
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false
+
+  - name: apply_material
+    description: >-
+      Apply an existing material to selected or named 3ds Max nodes. Use after
+      creating a material or when assigning scene materials. Returns the number
+      of nodes updated.
+    source_file: action_apply_material.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      required: [material_name]
+      additionalProperties: false
+      properties:
+        material_name:
+          type: string
+          minLength: 1
+          description: Existing material name to apply.
+        node_names:
+          type: array
+          description: Optional target node names. Uses current selection when omitted.
+          items:
+            type: string
+            minLength: 1
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false

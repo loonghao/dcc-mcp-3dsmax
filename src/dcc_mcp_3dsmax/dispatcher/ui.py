@@ -379,7 +379,18 @@ class MaxUiDispatcher:
 
     # ── BaseDccCallableDispatcher protocol implementation ─────────────────────
 
-    def dispatch_callable(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    def dispatch_callable(
+        self,
+        func: Callable[..., Any],
+        *args: Any,
+        affinity: str = "main",
+        context: Any = None,
+        action_name: Optional[str] = None,
+        skill_name: Optional[str] = None,
+        execution: Optional[str] = None,
+        timeout_hint_secs: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Run *func* on 3ds Max's UI thread and return the result.
 
         This method satisfies the
@@ -388,11 +399,14 @@ class MaxUiDispatcher:
         """
         import uuid
 
-        request_id = f"dispatch_{uuid.uuid4().hex}"
+        _ = (context, skill_name, execution)
+        request_id = action_name or f"dispatch_{uuid.uuid4().hex}"
+        timeout_ms = timeout_hint_secs * 1000 if timeout_hint_secs is not None else None
         result = self.submit_callable(
             request_id=request_id,
             task=lambda: func(*args, **kwargs),
-            affinity="main",
+            affinity=affinity,
+            timeout_ms=timeout_ms,
         )
 
         if not isinstance(result, dict):

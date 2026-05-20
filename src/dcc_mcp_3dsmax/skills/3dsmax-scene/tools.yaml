@@ -1,0 +1,21 @@
+tools:
+  - name: get_scene_info
+    description: >-
+      Get basic information about the current 3ds Max scene. Use when the user
+      asks about scene name, units, or node counts. Returns scene name, node
+      count, and unit system.
+    source_file: action_get_scene_info.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false

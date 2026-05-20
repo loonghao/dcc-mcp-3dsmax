@@ -1,6 +1,6 @@
 # max-link-win.ps1
 # Create symlinks from source tree into 3ds Max's scripts directory for live development
-# Usage: just max-link-win  or  powershell -File tools/max-link-win.ps1 -MaxVersion 2025
+# Usage: just max-link-win  or  powershell -File tools/max-link-win.ps1 -MaxVersion 2024
 
 param(
     [string]$MaxVersion = $env:MAX_VERSION,
@@ -10,7 +10,7 @@ param(
 
 # Default 3ds Max version
 if ([string]::IsNullOrEmpty($MaxVersion)) {
-    $MaxVersion = "2025"
+    $MaxVersion = "2024"
 }
 
 # Detect 3ds Max scripts directory
@@ -73,4 +73,5 @@ try {
 Write-Host ""
 Write-Host "   Next: start 3ds Max $MaxVersion and run in MAXScript Listener:" -ForegroundColor Cyan
 Write-Host "      python.ExecuteFile @""$Target\__init__.py""" -ForegroundColor Gray
-Write-Host "   Or add to startup script: import dcc_mcp_3dsmax" -ForegroundColor Gray
+Write-Host "   Then install the menu with:" -ForegroundColor Cyan
+Write-Host "      python.Execute ""import dcc_mcp_3dsmax; dcc_mcp_3dsmax.install_menu(); dcc_mcp_3dsmax.install_shutdown_callback()""" -ForegroundColor Gray

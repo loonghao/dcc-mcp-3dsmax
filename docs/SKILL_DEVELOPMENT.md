@@ -83,10 +83,10 @@ Declares ``affinity: main`` (must run on 3ds Max main thread).
 
 Action scripts should:
 
-1. Import from `dcc_mcp_core.actions` and `dcc_mcp_3dsmax.api`
-2. Define a `run(request)` function
+1. Import from `dcc_mcp_3dsmax.api`
+2. Define a `main(**params)` function
 3. Use the `@with_max` decorator for 3ds Max operations
-4. Return an `ActionResponse`
+4. Return a plain dictionary
 
 ### Basic Template
 
@@ -96,45 +96,37 @@ Action scripts should:
 # Import future modules
 from __future__ import annotations
 
-# Import third-party modules
-from dcc_mcp_core.actions import ActionRequest, ActionResponse
-
 # Import local modules
-from dcc_mcp_3dsmax.api import get_runtime, max_success, with_max
+from dcc_mcp_3dsmax.api import get_runtime, with_max
 
 
 @with_max
-def run(request: ActionRequest) -> ActionResponse:
+def main(param1: str = "default_value") -> dict:
     """Action description.
 
     Parameters
     ----------
-    request : ActionRequest
-        The action request containing parameters.
+    param1 : str
+        Example parameter.
 
     Returns
     -------
-    ActionResponse
+    dict
         The action response.
     """
-    params = request.params or {}
-
-    # Get required parameters
-    param1 = params.get("param1", "default_value")
-
     # Access 3ds Max runtime
     rt = get_runtime()
 
     # Perform 3ds Max operations
     # ...
 
-    return ActionResponse(
-        success=True,
-        message="Operation completed successfully",
-        data={
+    return {
+        "success": True,
+        "message": "Operation completed successfully",
+        "data": {
             "result": "value",
         },
-    )
+    }
 ```
 
 ### Using API Helpers
@@ -142,17 +134,13 @@ def run(request: ActionRequest) -> ActionResponse:
 ```python
 from dcc_mcp_3dsmax.api import require_param, max_success, max_error
 
-def run(request: ActionRequest) -> ActionResponse:
-    params = request.params or {}
-
+def main(node_name: str = None, optional_param: str = None) -> dict:
     # Require a parameter (returns error if missing)
-    node_name = require_param(params, "node_name")
-
-    # Check if param was provided (returns None if not)
-    optional_param = params.get("optional_param")
+    params = {"node_name": node_name, "optional_param": optional_param}
+    resolved_node_name = require_param(params, "node_name")
 
     # Return success
-    return max_success("Operation successful", node_name=node_name)
+    return max_success("Operation successful", node_name=resolved_node_name)
 
     # Return error
     # return max_error("Operation failed", reason="...")
@@ -173,7 +161,7 @@ from __future__ import annotations
 import pytest
 
 # Import local modules
-from dcc_mcp_3dsmax.skills.modeling.action_create_box import run
+from dcc_mcp_3dsmax.skills.modeling.action_create_box import main
 
 
 class TestCreateBox:
@@ -181,20 +169,14 @@ class TestCreateBox:
 
     def test_create_box_default(self):
         """Test creating a box with default parameters."""
-        request = ActionRequest(params={})
-        response = run(request)
-        assert response.success
-        assert "node_name" in response.data
+        response = main()
+        assert response["success"]
+        assert "node_name" in response["data"]
 
     def test_create_box_custom(self):
         """Test creating a box with custom parameters."""
-        request = ActionRequest(params={
-            "width": 200.0,
-            "height": 150.0,
-            "depth": 100.0,
-        })
-        response = run(request)
-        assert response.success
+        response = main(width=200.0, height=150.0, depth=100.0)
+        assert response["success"]
 ```
 
 ## Examples
@@ -238,25 +220,17 @@ Declares ``affinity: main``.
 # Import future modules
 from __future__ import annotations
 
-# Import third-party modules
-from dcc_mcp_core.actions import ActionRequest, ActionResponse
-
 # Import local modules
-from dcc_mcp_3dsmax.api import get_runtime, max_success, with_max
+from dcc_mcp_3dsmax.api import get_runtime, with_max
 
 
 @with_max
-def run(request: ActionRequest) -> ActionResponse:
+def main() -> dict:
     """Get scene information.
-
-    Parameters
-    ----------
-    request : ActionRequest
-        The action request.
 
     Returns
     -------
-    ActionResponse
+    dict
         The action response.
     """
     rt = get_runtime()
@@ -269,15 +243,15 @@ def run(request: ActionRequest) -> ActionResponse:
     selection = list(rt.selection)
     selection_count = len(selection)
 
-    return ActionResponse(
-        success=True,
-        message=f"Scene has {node_count} nodes, {selection_count} selected",
-        data={
+    return {
+        "success": True,
+        "message": f"Scene has {node_count} nodes, {selection_count} selected",
+        "data": {
             "node_count": node_count,
             "selection_count": selection_count,
             "scene_name": str(rt.sceneFileName) if rt.sceneFileName else None,
         },
-    )
+    }
 ```
 
 ### Example 2: Create Material Skill
@@ -288,7 +262,7 @@ See `src/dcc_mcp_3dsmax/skills/3dsmax-materials/` for a complete example.
 
 1. **Always use `@with_max` decorator** for actions that call `pymxs.runtime`
 2. **Validate parameters** using `require_param()`
-3. **Return meaningful messages** in `ActionResponse`
+3. **Return meaningful messages** in response dictionaries
 4. **Handle errors gracefully** and return `success=False`
 5. **Use type hints** for better code clarity
 6. **Write tests** for your actions
@@ -320,9 +294,8 @@ def long_running_task():
 For long operations, report progress via `progress_token`:
 
 ```python
-def run(request: ActionRequest) -> ActionResponse:
-    params = request.params or {}
-    progress_token = params.get("_meta", {}).get("progressToken")
+def main(_meta: dict = None) -> dict:
+    progress_token = (_meta or {}).get("progressToken")
 
     for i in range(100):
         # Report progress
@@ -330,4 +303,5 @@ def run(request: ActionRequest) -> ActionResponse:
             # Send progress notification
             pass
         # ... do work ...
+    return {"success": True, "message": "Operation completed"}
 ```

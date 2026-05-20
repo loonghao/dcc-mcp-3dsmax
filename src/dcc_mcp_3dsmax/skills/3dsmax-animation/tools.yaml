@@ -1,0 +1,67 @@
+tools:
+  - name: set_keyframe
+    description: >-
+      Set a transform keyframe on a 3ds Max node. Use when animating position,
+      rotation, or scale. Returns the node name, frame, and keyed property.
+    source_file: action_set_keyframe.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      required: [node_name, time]
+      additionalProperties: false
+      properties:
+        node_name:
+          type: string
+          minLength: 1
+          description: Existing node name to animate.
+        time:
+          type: number
+          description: Frame number where the key should be set.
+        property:
+          type: string
+          enum: [position, rotation, scale]
+          default: position
+          description: Transform property to key.
+        value:
+          type: array
+          minItems: 3
+          maxItems: 4
+          description: Transform value. Rotation accepts optional fourth quaternion component.
+          items:
+            type: number
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false
+
+  - name: play_animation
+    description: >-
+      Play the current 3ds Max animation range in the viewport. Use when the
+      user wants to preview timeline animation. Returns the requested playback
+      frame range.
+    source_file: action_play_animation.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        from_frame:
+          type: number
+          description: Optional frame to move to before playback starts.
+        to_frame:
+          type: number
+          description: Reserved end frame hint for callers; current implementation uses viewport playback.
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false

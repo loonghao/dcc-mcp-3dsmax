@@ -10,7 +10,7 @@ Usage (inside 3ds Max MAXScript Listener or startup script)::
 
     import dcc_mcp_3dsmax
 
-    # Start with default port (auto-gateway: first instance wins 8765)
+    # Start on a random instance port and publish through the stable gateway.
     server = dcc_mcp_3dsmax.start_server()
 
     # Progressive loading — discover skills without loading them immediately
@@ -30,11 +30,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Import third-party modules
-from dcc_mcp_core import DccServerOptions
+from dcc_mcp_core import DccServerOptions, HostExecutionBridge, scan_and_load_strict
 from dcc_mcp_core.server_base import DccServerBase
 
+try:
+    from dcc_mcp_core import MinimalModeConfig
+except ImportError:  # pragma: no cover - compatibility with older core wheels
+    MinimalModeConfig = Any  # type: ignore[misc,assignment]
+
 # Import local modules
-from dcc_mcp_3dsmax import _env
+from dcc_mcp_3dsmax import _env, _executor
 from dcc_mcp_3dsmax.__version__ import __version__
 from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string
 
@@ -44,7 +49,8 @@ logger = logging.getLogger(__name__)
 
 SERVER_NAME = "dcc-mcp-3dsmax"
 SERVER_VERSION = __version__
-DEFAULT_PORT = 8765
+DEFAULT_PORT = 0
+DEFAULT_GATEWAY_PORT = 9765
 
 # Built-in skills directory shipped with this package
 _BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
@@ -68,7 +74,7 @@ class MaxServerOptions:
     server_name: str = SERVER_NAME
     server_version: str = SERVER_VERSION
     # Gateway options
-    gateway_port: Optional[int] = None
+    gateway_port: Optional[int] = DEFAULT_GATEWAY_PORT
     registry_dir: Optional[str] = None
     dcc_version: Optional[str] = None
     scene: Optional[str] = None
@@ -135,10 +141,8 @@ class MaxMcpServer(DccServerBase):
 
     Multi-instance / gateway
     ------------------------
-    dcc-mcp-core implements an **auto-gateway** with first-wins port competition:
-    the first 3ds Max process to bind the well-known port (8765) becomes the
-    gateway; subsequent instances start on ephemeral ports and register
-    themselves automatically.
+    dcc-mcp-core exposes the stable gateway at http://127.0.0.1:9765/mcp while
+    each 3ds Max instance listens on its own ephemeral localhost port.
 
     Progressive loading
     -------------------
@@ -159,7 +163,7 @@ class MaxMcpServer(DccServerBase):
         extra_skill_paths: Optional[List[str]] = None,
         server_name: str = SERVER_NAME,
         server_version: str = SERVER_VERSION,
-        gateway_port: Optional[int] = None,
+        gateway_port: Optional[int] = DEFAULT_GATEWAY_PORT,
         registry_dir: Optional[str] = None,
         dcc_version: Optional[str] = None,
         scene: Optional[str] = None,
@@ -168,6 +172,12 @@ class MaxMcpServer(DccServerBase):
         job_storage_path: Optional[str] = None,
         job_recovery: Optional[str] = None,
         enable_workflows: Optional[bool] = None,
+        dcc_pid: Optional[int] = None,
+        dcc_window_title: Optional[str] = None,
+        dcc_window_handle: Optional[int] = None,
+        snapshot_provider: Optional[Any] = None,
+        dispatcher: Optional[Any] = None,
+        execution_bridge: Optional[Any] = None,
         options: Optional[MaxServerOptions] = None,
     ) -> None:
         if options is None:
@@ -185,9 +195,23 @@ class MaxMcpServer(DccServerBase):
                 job_storage_path=job_storage_path,
                 job_recovery=job_recovery,
                 enable_workflows=enable_workflows,
+                dcc_pid=dcc_pid,
+                dcc_window_title=dcc_window_title,
+                dcc_window_handle=dcc_window_handle,
+                snapshot_provider=snapshot_provider,
+                dispatcher=dispatcher,
+                execution_bridge=execution_bridge,
             )
 
         super().__init__(options=options.to_core_options())
+        self._extra_skill_paths: List[str] = list(options.extra_skill_paths or [])
+        self._max_dispatcher: Any = None
+        self._execution_bridge: HostExecutionBridge
+        if options.execution_bridge is not None:
+            self._execution_bridge = options.execution_bridge
+            self.register_host_execution_bridge(self._execution_bridge)
+        else:
+            self.attach_dispatcher(options.dispatcher)
 
         # ── Prometheus metrics ──────────────────────────────────────
         if _env.resolve_metrics_enabled(options.metrics_enabled):
@@ -233,6 +257,19 @@ class MaxMcpServer(DccServerBase):
 
         logger.info("[%s] MaxMcpServer initialized (port=%s)", _DCC_NAME, options.port)
 
+    def attach_dispatcher(self, dispatcher: Any) -> None:
+        """Attach or replace the 3ds Max host dispatcher used by skill execution."""
+        self._max_dispatcher = dispatcher
+        self._register_execution_bridge(dispatcher)
+
+    def _register_execution_bridge(self, dispatcher: Any) -> None:
+        self._execution_bridge = HostExecutionBridge(
+            dispatcher=dispatcher,
+            runner=_executor.run_skill_script,
+            default_thread_affinity="main",
+        )
+        self.register_host_execution_bridge(self._execution_bridge)
+
     # ── 3ds Max version detection ──────────────────────────────────────
 
     def _version_string(self) -> str:
@@ -255,18 +292,64 @@ class MaxMcpServer(DccServerBase):
 
     def _collect_skill_paths(self) -> List[str]:
         """Collect and deduplicate existing skill paths."""
-        extra_paths = list(self._options.extra_skill_paths or []) if hasattr(self._options, "extra_skill_paths") else []
         return self.collect_skill_search_paths(
-            extra_paths=extra_paths,
+            extra_paths=self._extra_skill_paths,
             filter_existing=True,
         )
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
-    def start(self) -> "MaxMcpServer":
+    def start(self, *, install_atexit_hook: bool = True) -> "MaxMcpServer":
         """Start the MCP HTTP server.  Returns *self* for chaining."""
-        super().start()
+        super().start(install_atexit_hook=install_atexit_hook)
         return self
+
+    def stop(self) -> None:
+        """Stop the MCP server and drain any attached 3ds Max dispatcher."""
+        dispatcher = getattr(self, "_dcc_dispatcher", None)
+        if dispatcher is not None:
+            shutdown = getattr(dispatcher, "shutdown", None)
+            if callable(shutdown):
+                try:
+                    try:
+                        signalled = shutdown("Interrupted")
+                    except TypeError:
+                        signalled = shutdown()
+                    logger.info("[%s] dispatcher.shutdown signalled %s job(s)", _DCC_NAME, signalled)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[%s] Error draining dispatcher during stop(): %s", _DCC_NAME, exc)
+        super().stop()
+
+    def register_builtin_actions(
+        self,
+        extra_skill_paths: Optional[List[str]] = None,
+        include_bundled: bool = True,
+        minimal_mode: Optional["MinimalModeConfig"] = None,
+        strict_scan: Optional[bool] = None,
+    ) -> "MaxMcpServer":
+        """Discover built-in skills using the core 0.17 composition contract."""
+        paths = list(extra_skill_paths or []) + self._extra_skill_paths
+        super().register_builtin_actions(
+            extra_skill_paths=paths,
+            include_bundled=include_bundled,
+            minimal_mode=minimal_mode,
+        )
+        if _env.resolve_strict_skill_scan(strict_scan):
+            self._strict_skill_scan(paths, include_bundled=include_bundled)
+        return self
+
+    def _strict_skill_scan(
+        self,
+        extra_skill_paths: Optional[List[str]] = None,
+        include_bundled: bool = True,
+    ) -> None:
+        """Re-scan skill paths with core strict validation enabled."""
+        scan_paths = self.collect_skill_search_paths(
+            extra_paths=extra_skill_paths,
+            include_bundled=include_bundled,
+            filter_existing=True,
+        )
+        scan_and_load_strict(extra_paths=scan_paths, dcc_name=_DCC_NAME)
 
     # ── Progressive skill loading ──────────────────────────────────────────────
 
@@ -292,60 +375,83 @@ class MaxMcpServer(DccServerBase):
         logger.debug("MaxMcpServer: discovered %d new skill(s)", count)
         return count
 
-    def load_skill(self, skill_name: str) -> List[str]:
-        """Load a skill by name — imports scripts and registers tools.
+    def load_skill(self, skill_name: str) -> bool:
+        """Load a skill by name.
 
         Args:
             skill_name: Skill name as declared in ``SKILL.md`` (e.g. ``"3dsmax-scene"``).
 
         Returns:
-            List of action names that were registered.
-
-        Raises:
-            RuntimeError: If the server is not running.
+            ``True`` when the core server accepted the load request.
         """
         if self._handle is None:
-            raise RuntimeError("Server is not running — call start() first")
-        actions = self._server.load_skill(skill_name)
-        logger.debug("MaxMcpServer: loaded skill %r → actions: %s", skill_name, actions)
-        return actions
+            return False
+        try:
+            self._server.load_skill(skill_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("MaxMcpServer: load_skill(%r) failed: %s", skill_name, exc)
+            return False
+        return True
 
-    def unload_skill(self, skill_name: str) -> int:
+    def unload_skill(self, skill_name: str) -> bool:
         """Unload a skill, removing its tools from the registry.
 
         Args:
             skill_name: Skill name to unload.
 
         Returns:
-            Number of actions removed.
-
-        Raises:
-            RuntimeError: If the server is not running.
+            ``True`` when the core server accepted the unload request.
         """
         if self._handle is None:
-            raise RuntimeError("Server is not running — call start() first")
-        count = self._server.unload_skill(skill_name)
-        logger.debug("MaxMcpServer: unloaded skill %r (%d action(s) removed)", skill_name, count)
-        return count
+            return False
+        try:
+            self._server.unload_skill(skill_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("MaxMcpServer: unload_skill(%r) failed: %s", skill_name, exc)
+            return False
+        return True
 
-    def list_skills(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_skills(self, status: Optional[str] = None) -> List[Dict[str, Any]]:  # type: ignore[override]
         """List all discovered skills with their load status."""
         if self._handle is None:
             return []
         return list(self._server.list_skills(status=status))
+
+    def search_skills(  # type: ignore[override]
+        self,
+        query: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        dcc: Optional[str] = None,
+        scope: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search for skills matching the given criteria."""
+        if self._handle is None:
+            return []
+        try:
+            return list(
+                self._server.search_skills(
+                    query=query,
+                    tags=tags or [],
+                    dcc=dcc or _DCC_NAME,
+                    scope=scope,
+                    limit=limit,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("MaxMcpServer: search_skills failed: %s", exc)
+            return []
 
     def find_skills(
         self,
         query: Optional[str] = None,
         tags: Optional[List[str]] = None,
         dcc: Optional[str] = None,
+        scope: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """Search for skills matching the given criteria."""
-        if self._handle is None:
-            return []
-        tags_list: List[str] = tags if tags is not None else []
-        dcc_name: str = dcc if dcc is not None else _DCC_NAME
-        return list(self._server.search_skills(query=query, tags=tags_list, dcc=dcc_name))
+        """Backward-compatible alias for :meth:`search_skills`."""
+        return self.search_skills(query=query, tags=tags, dcc=dcc, scope=scope, limit=limit)
 
     def is_skill_loaded(self, skill_name: str) -> bool:
         """Return ``True`` if the named skill is currently loaded."""
@@ -368,10 +474,11 @@ _server_instance: Optional[MaxMcpServer] = None
 def start_server(
     port: int = DEFAULT_PORT,
     extra_skill_paths: Optional[List[str]] = None,
+    options: Optional[MaxServerOptions] = None,
     register_builtins: bool = True,
     include_bundled: bool = True,
     enable_hot_reload: bool = False,
-    gateway_port: Optional[int] = None,
+    gateway_port: Optional[int] = DEFAULT_GATEWAY_PORT,
     registry_dir: Optional[str] = None,
     dcc_version: Optional[str] = None,
     scene: Optional[str] = None,
@@ -380,6 +487,14 @@ def start_server(
     job_storage_path: Optional[str] = None,
     job_recovery: Optional[str] = None,
     enable_workflows: Optional[bool] = None,
+    dcc_pid: Optional[int] = None,
+    dcc_window_title: Optional[str] = None,
+    dcc_window_handle: Optional[int] = None,
+    snapshot_provider: Optional[Any] = None,
+    dispatcher: Optional[Any] = None,
+    execution_bridge: Optional[Any] = None,
+    minimal_mode: Optional["MinimalModeConfig"] = None,
+    strict_scan: Optional[bool] = None,
 ) -> MaxMcpServer:
     """Start the 3ds Max MCP server (creates a process-level singleton).
 
@@ -387,12 +502,12 @@ def start_server(
     existing instance without restarting it.
 
     Args:
-        port: Preferred TCP port (default 8765; use 0 for a random port).
+        port: Preferred TCP port (default 0 = random instance port).
         extra_skill_paths: Additional skill directories beyond built-ins.
         register_builtins: If ``True``, discover and load all skills.
         include_bundled: Include dcc-mcp-core bundled skills.
         enable_hot_reload: Enable skill hot-reload on file changes.
-        gateway_port: Gateway competition port.
+        gateway_port: Stable gateway port (default 9765).
         registry_dir: Shared registry directory.
         dcc_version: 3ds Max version for gateway registry.
         scene: Currently open scene file path for the gateway registry.
@@ -401,6 +516,10 @@ def start_server(
         job_storage_path: SQLite job DB path (``None`` = env / default).
         job_recovery: Job recovery policy (``"drop"`` or ``"requeue"``).
         enable_workflows: Enable workflow MCP tools (``None`` = env).
+        dispatcher: Optional host dispatcher for main-thread execution.
+        execution_bridge: Optional execution bridge supplied by dcc-mcp-core.
+        minimal_mode: Optional core progressive-loading configuration.
+        strict_scan: Validate skill directories after discovery.
 
     Returns:
         The running :class:`MaxMcpServer` instance.
@@ -409,24 +528,63 @@ def start_server(
     if _server_instance is not None and _server_instance.is_running:
         return _server_instance
 
-    _server_instance = MaxMcpServer(
-        port=port,
-        extra_skill_paths=extra_skill_paths,
-        gateway_port=gateway_port,
-        registry_dir=registry_dir,
-        dcc_version=dcc_version,
-        scene=scene,
-        enable_gateway_failover=enable_gateway_failover,
-        metrics_enabled=metrics_enabled,
-        job_storage_path=job_storage_path,
-        job_recovery=job_recovery,
-        enable_workflows=enable_workflows,
-    )
+    if options is None:
+        options = MaxServerOptions(
+            port=port,
+            extra_skill_paths=extra_skill_paths,
+            gateway_port=gateway_port,
+            registry_dir=registry_dir,
+            dcc_version=dcc_version,
+            scene=scene,
+            enable_gateway_failover=enable_gateway_failover,
+            metrics_enabled=metrics_enabled,
+            job_storage_path=job_storage_path,
+            job_recovery=job_recovery,
+            enable_workflows=enable_workflows,
+            dcc_pid=dcc_pid,
+            dcc_window_title=dcc_window_title,
+            dcc_window_handle=dcc_window_handle,
+            snapshot_provider=snapshot_provider,
+            dispatcher=dispatcher,
+            execution_bridge=execution_bridge,
+        )
+
+    _server_instance = MaxMcpServer(options=options)
     if register_builtins:
-        _server_instance.register_builtin_actions(include_bundled=include_bundled)
+        _server_instance.register_builtin_actions(
+            include_bundled=include_bundled,
+            minimal_mode=minimal_mode,
+            strict_scan=strict_scan,
+        )
     if enable_hot_reload:
         _server_instance.enable_hot_reload()
     _server_instance.start()
+    return _server_instance
+
+
+def prepare_server(
+    extra_skill_paths: Optional[List[str]] = None,
+    register_builtins: bool = True,
+    include_bundled: bool = True,
+    options: Optional[MaxServerOptions] = None,
+) -> MaxMcpServer:
+    """Create the singleton server and register tools without starting HTTP."""
+    global _server_instance  # noqa: PLW0603
+    if _server_instance is not None:
+        return _server_instance
+
+    if options is None:
+        options = MaxServerOptions(
+            port=0,
+            gateway_port=DEFAULT_GATEWAY_PORT,
+            extra_skill_paths=extra_skill_paths,
+            enable_gateway_failover=False,
+            job_storage_path="",
+        )
+
+    _server_instance = MaxMcpServer(options=options)
+    if register_builtins:
+        _server_instance.register_builtin_actions(include_bundled=include_bundled)
     return _server_instance
 
 

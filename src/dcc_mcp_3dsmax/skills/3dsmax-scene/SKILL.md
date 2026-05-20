@@ -1,41 +1,24 @@
+---
+name: 3dsmax-scene
+description: >-
+  Domain skill - query scene-level information from the current Autodesk
+  3ds Max session. Use when the user asks about scene name, node count, or
+  units. Not for mutating scene content.
+license: MIT
+compatibility: "dcc-mcp-core 0.17+, 3ds Max 2024+"
+metadata:
+  dcc-mcp:
+    dcc: 3dsmax
+    version: "1.0.0"
+    layer: domain
+    stage: scene
+    search-hint: "3ds Max scene info nodes statistics units current file"
+    tags: "3dsmax, scene, info, query"
+    tools: tools.yaml
+---
+
 # 3ds Max Scene Info Skill
 
-Query information about the current 3ds Max scene.
-
-## Metadata
-
-```yaml
-name: 3dsmax-scene
-description: Query 3ds Max scene information (nodes, stats, units)
-dcc:
-  - 3dsmax
-tags:
-  - scene
-  - info
-  - query
-```
-
-## Actions
-
-### action_get_scene_info.py
-
-Get basic information about the current scene.
-
-**Parameters**: None
-
-**Returns**:
-- `node_count`: Number of nodes in scene
-- `scene_name`: Current scene file name
-- `units`: Current scene units
-
-### action_list_nodes.py
-
-List all nodes in the scene with optional filtering.
-
-**Parameters**:
-- `type` (optional): Filter by node type (e.g., "Geometry", "Light", "Camera")
-- `name_contains` (optional): Filter by name substring
-
-**Returns**:
-- `nodes`: List of node names matching criteria
-- `count`: Number of nodes found
+Query read-only scene metadata through `pymxs`. Tool contracts live in
+`tools.yaml`; scene reads still declare `affinity: main` because they enter the
+3ds Max host API.

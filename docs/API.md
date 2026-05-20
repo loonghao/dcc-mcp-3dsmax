@@ -131,8 +131,8 @@ Require a parameter or raise `MissingParamError`:
 ```python
 from dcc_mcp_3dsmax.api import require_param
 
-def run(request):
-    params = request.params or {}
+def main(node_name=None):
+    params = {"node_name": node_name}
     node_name = require_param(params, "node_name")
     # If "node_name" not in params, returns error response automatically
 ```
@@ -151,19 +151,20 @@ from dcc_mcp_3dsmax import (
     stop_server,
     get_server,
     MaxServerOptions,
+    DEFAULT_GATEWAY_PORT,
     DEFAULT_PORT,
     SERVER_NAME,
 )
 ```
 
-### `start_server(port=None, options=None)`
+### `start_server(port=0, options=None)`
 
 Start the MCP server inside 3ds Max:
 
 ```python
 from dcc_mcp_3dsmax import start_server
 
-# Start on default port (8000)
+# Start on a random instance port and publish through http://127.0.0.1:9765/mcp
 handle = start_server()
 
 # Start on custom port
@@ -220,3 +221,18 @@ dispatcher, pump = create_dispatcher()
 if pump:
     pump.install()  # Start the idle-event pump
 ```
+
+## Sidecar Bridge
+
+For external MCP processes, start the structured bridge inside 3ds Max:
+
+```python
+from dcc_mcp_3dsmax.max_bootstrap import start_sidecar_bridge
+
+start_sidecar_bridge()
+```
+
+This starts a random-port main-thread HTTP bridge, a random-port JSON-line
+`qtserver://` bridge for `dcc-mcp-server.exe sidecar`, and registers the
+3ds Max instance with the stable gateway at `http://127.0.0.1:9765/mcp`.
+See `docs/SIDECAR.md` for the full protocol.

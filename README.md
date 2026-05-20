@@ -1,14 +1,14 @@
 # dcc-mcp-3dsmax
 
-3ds Max plugin for the DCC Model Context Protocol (MCP) ecosystem — embeds a Streamable HTTP MCP server directly inside 3ds Max.
+3ds Max plugin for the DCC Model Context Protocol (MCP) ecosystem.
 
 > **Status:** This project is under active development. APIs, packaging, and 3ds Max integration details may change quickly while the adapter tracks the latest `dcc-mcp-core` releases.
 
 ## Features
 
-- **Embedded MCP Server**: No external gateway or IPC required
+- **Sidecar MCP Server**: Starts `dcc-mcp-server.exe sidecar` and keeps 3ds Max scene edits on the main thread
 - **Progressive Skill Loading**: Discover skills without loading them immediately
-- **Gateway Failover**: Multi-instance support with automatic gateway election
+- **Shared Gateway**: Registers with the stable gateway at `http://127.0.0.1:9765/mcp`
 - **Job Persistence**: SQLite-based job storage for long-running operations
 - **Prometheus Metrics**: Optional `/metrics` endpoint for monitoring
 
@@ -23,7 +23,7 @@ pip install dcc-mcp-3dsmax
 ```python
 import dcc_mcp_3dsmax
 
-# Start with default port (auto-gateway: first instance wins 8765)
+# Start on a random instance port; the public gateway stays fixed.
 server = dcc_mcp_3dsmax.start_server()
 
 # Progressive loading — discover skills without loading them immediately
@@ -32,6 +32,24 @@ server.load_skill("3dsmax-scene")  # lazy-load a specific skill
 
 dcc_mcp_3dsmax.stop_server()
 ```
+
+## Sidecar Bridge
+
+Start the sidecar bootstrap inside 3ds Max:
+
+```maxscript
+python.ExecuteFile @"C:\path\to\dcc-mcp-3dsmax\examples\start_sidecar_bridge.py"
+```
+
+This starts the random-port `/dispatch` bridge for main-thread scene edits, a
+random-port `qtserver://` bridge for the sidecar process, and registers the
+3ds Max instance with the stable gateway at `http://127.0.0.1:9765/mcp`.
+See `docs/SIDECAR.md`.
+
+The bootstrap also installs a `DCC MCP` menu with Start Sidecar, Stop Sidecar,
+Open Gateway Admin, and Print Status commands. 3ds Max shutdown triggers the
+same stop path via `#preSystemShutdown`, so the sidecar process and local
+bridges are cleaned up when the host exits.
 
 ## Skill Development
 
@@ -42,13 +60,9 @@ Create a skill with `SKILL.md` metadata file and Python scripts:
 from dcc_mcp_3dsmax.api import max_success, with_max
 
 @with_max
-def execute(params: dict) -> dict:
+def main(width: float = 100.0, height: float = 100.0, depth: float = 100.0) -> dict:
     import pymxs
     rt = pymxs.runtime
-
-    width = params.get("width", 100.0)
-    height = params.get("height", 100.0)
-    depth = params.get("depth", 100.0)
 
     box_obj = rt.Box(width=width, height=height, depth=depth)
     return max_success("Created box", object_name=str(box_obj))
@@ -64,12 +78,15 @@ def execute(params: dict) -> dict:
 | `DCC_MCP_3DSMAX_DISABLE_ARBITRARY_SCRIPT` | Disable all arbitrary script execution | `0` |
 | `DCC_MCP_3DSMAX_ENABLE_GATEWAY_FAILOVER` | Enable gateway failover | `1` |
 | `DCC_MCP_3DSMAX_SKILL_PATHS` | Extra skill search paths (semicolon-separated) | None |
+| `DCC_MCP_3DSMAX_BRIDGE_PORT` | Sidecar bridge localhost port | random |
+| `DCC_MCP_REGISTRY_DIR` | Optional shared gateway/sidecar registry override | core default |
 
 ## Requirements
 
 - 3ds Max 2017 or later (Python 3.x with pymxs support)
 - Python >= 3.7
-- dcc-mcp-core >= 0.17.5
+- dcc-mcp-core >= 0.17.16
+- dcc-mcp-server >= 0.17.16
 
 ## License
 
