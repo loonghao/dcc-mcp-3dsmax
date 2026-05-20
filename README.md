@@ -85,8 +85,8 @@ def main(width: float = 100.0, height: float = 100.0, depth: float = 100.0) -> d
 
 - 3ds Max 2017 or later (Python 3.x with pymxs support)
 - Python >= 3.7
-- dcc-mcp-core >= 0.17.16
-- dcc-mcp-server >= 0.17.16
+- dcc-mcp-core >= 0.17.19
+- dcc-mcp-server >= 0.17.19
 
 ## License
 

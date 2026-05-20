@@ -110,7 +110,7 @@ class TestServerOptions:
 
 
 class TestExecution:
-    """Test 3ds Max adapter execution compatibility helpers."""
+    """Test 3ds Max adapter execution helpers."""
 
     def test_executor_runs_main_entrypoint(self, tmp_path):
         """Adapter runner executes the current main(**params) convention."""
@@ -129,6 +129,17 @@ class TestExecution:
 
         result = run_skill_script(str(script), {"width": 12})
         assert result == {"success": True, "message": "ok", "data": {"width": 12}}
+
+    def test_executor_rejects_non_dict_main_result(self, tmp_path):
+        """Adapter runner enforces the current dict envelope contract."""
+        from dcc_mcp_3dsmax._executor import run_skill_script
+
+        script = tmp_path / "action_bad.py"
+        script.write_text("def main():\n    return 'ok'\n", encoding="utf-8")
+
+        result = run_skill_script(str(script), {})
+        assert result["success"] is False
+        assert "must return a dict" in result["message"]
 
     def test_standalone_dispatcher_supports_core_protocol(self):
         """Standalone dispatcher accepts HostExecutionBridge metadata kwargs."""

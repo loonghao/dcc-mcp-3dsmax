@@ -30,13 +30,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Import third-party modules
-from dcc_mcp_core import DccServerOptions, HostExecutionBridge, scan_and_load_strict
+from dcc_mcp_core import DccServerOptions, HostExecutionBridge, MinimalModeConfig, scan_and_load_strict
 from dcc_mcp_core.server_base import DccServerBase
-
-try:
-    from dcc_mcp_core import MinimalModeConfig
-except ImportError:  # pragma: no cover - compatibility with older core wheels
-    MinimalModeConfig = Any  # type: ignore[misc,assignment]
 
 # Import local modules
 from dcc_mcp_3dsmax import _env, _executor
@@ -441,17 +436,6 @@ class MaxMcpServer(DccServerBase):
         except Exception as exc:  # noqa: BLE001
             logger.debug("MaxMcpServer: search_skills failed: %s", exc)
             return []
-
-    def find_skills(
-        self,
-        query: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        dcc: Optional[str] = None,
-        scope: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
-        """Backward-compatible alias for :meth:`search_skills`."""
-        return self.search_skills(query=query, tags=tags, dcc=dcc, scope=scope, limit=limit)
 
     def is_skill_loaded(self, skill_name: str) -> bool:
         """Return ``True`` if the named skill is currently loaded."""

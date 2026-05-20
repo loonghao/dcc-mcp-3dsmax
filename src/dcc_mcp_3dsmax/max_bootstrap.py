@@ -19,6 +19,7 @@ from dcc_mcp_3dsmax.sidecar.bridge import execute_on_main_thread, start_bridge, 
 from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, stop_qt_bridge
 
 _sidecar_process: Optional[subprocess.Popen] = None
+_sidecar_log_handle: Optional[Any] = None
 _cleanup_registered = False
 
 
@@ -46,7 +47,7 @@ def start_sidecar_bridge(
 
 def start_sidecar_server() -> subprocess.Popen:
     """Start ``dcc-mcp-server.exe sidecar`` for gateway/admin registration."""
-    global _sidecar_process
+    global _sidecar_log_handle, _sidecar_process
 
     if _sidecar_process is not None and _sidecar_process.poll() is None:
         return _sidecar_process
@@ -72,14 +73,35 @@ def start_sidecar_server() -> subprocess.Popen:
     ]
     env = dict(os.environ)
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    log_path = env.get("DCC_MCP_3DSMAX_SIDECAR_LOG")
+    stdout_target: Any = subprocess.DEVNULL
+    stderr_target: Any = subprocess.DEVNULL
+    if log_path:
+        _close_sidecar_log()
+        _sidecar_log_handle = Path(log_path).expanduser().open("a", encoding="utf-8")
+        stdout_target = _sidecar_log_handle
+        stderr_target = _sidecar_log_handle
     _sidecar_process = subprocess.Popen(  # noqa: S603 - binary path is resolved locally or explicitly configured.
         cmd,
         env=env,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=stdout_target,
+        stderr=stderr_target,
         creationflags=creationflags,
     )
+    try:
+        exit_code = _sidecar_process.wait(timeout=0.75)
+    except subprocess.TimeoutExpired:
+        exit_code = None
+    if exit_code is not None:
+        _sidecar_process = None
+        _close_sidecar_log()
+        detail = ""
+        if log_path:
+            detail = "\n{}".format(_read_tail(Path(log_path).expanduser()))
+        raise RuntimeError(
+            "dcc-mcp-server sidecar exited during startup with code {}.{}".format(exit_code, detail)
+        )
     print(
         "dcc-mcp-3dsmax sidecar server started pid={} ({})".format(
             _sidecar_process.pid,
@@ -104,6 +126,7 @@ def stop_sidecar_bridge(timeout: float = 5.0) -> None:
             process.kill()
             process.wait(timeout=timeout)
         print("dcc-mcp-3dsmax sidecar server stopped pid={}".format(process.pid))
+    _close_sidecar_log()
 
     stop_qt_bridge()
     stop_bridge()
@@ -170,6 +193,24 @@ def _server_binary_path() -> Path:
             "dcc-mcp-server binary not found. Run `just max-install-core-win` "
             "or set DCC_MCP_SERVER_BIN."
         ) from exc
+
+
+def _close_sidecar_log() -> None:
+    global _sidecar_log_handle
+    if _sidecar_log_handle is None:
+        return
+    _sidecar_log_handle.close()
+    _sidecar_log_handle = None
+
+
+def _read_tail(path: Path, max_chars: int = 4000) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "sidecar log could not be read: {}".format(path)
+    if len(text) <= max_chars:
+        return text
+    return text[-max_chars:]
 
 
 def _register_process_cleanup() -> None:

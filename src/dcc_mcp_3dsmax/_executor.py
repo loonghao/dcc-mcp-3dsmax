@@ -64,8 +64,6 @@ def _run_skill_script_untracked(script_path: str, params: Dict[str, Any]) -> Dic
     try:
         try:
             spec.loader.exec_module(module)
-        except SystemExit:
-            return _normalise_result(getattr(module, "__mcp_result__", None))
         except Exception as exc:  # noqa: BLE001
             return skill_exception(exc, message="Error loading skill script: {}".format(script_path))
 
@@ -77,19 +75,13 @@ def _run_skill_script_untracked(script_path: str, params: Dict[str, Any]) -> Dic
                     "message": "Skill script has no main() entry point: {}".format(script_path),
                 }
             result = main(**params)
-        except SystemExit:
-            result = getattr(module, "__mcp_result__", None)
         except Exception as exc:  # noqa: BLE001
             return skill_exception(exc)
-        return _normalise_result(result)
+        if not isinstance(result, dict):
+            return {
+                "success": False,
+                "message": "Skill script main() must return a dict: {}".format(script_path),
+            }
+        return result
     finally:
         sys.modules.pop(mod_name, None)
-
-
-def _normalise_result(result: Any) -> Dict[str, Any]:
-    """Convert common legacy result shapes into dictionaries."""
-    if result is None:
-        return {"success": True, "message": "Script executed"}
-    if isinstance(result, dict):
-        return result
-    return {"success": True, "message": str(result)}
