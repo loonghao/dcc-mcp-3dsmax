@@ -3,37 +3,21 @@
 # Import future modules
 from __future__ import annotations
 
-# Import third-party modules
-from dcc_mcp_core.actions import ActionRequest, ActionResponse
-
 # Import local modules
-from dcc_mcp_3dsmax.api import get_runtime, max_success, with_max
+from dcc_mcp_3dsmax.api import get_runtime, with_max
 
 
 @with_max
-def run(request: ActionRequest) -> ActionResponse:
+def main(material_name: str = None, node_names: list = None) -> dict:
     """Apply a material to specified objects or selection.
-
-    Parameters
-    ----------
-    request : ActionRequest
-        The action request containing parameters.
 
     Returns
     -------
-    ActionResponse
+    dict
         The action response.
     """
-    params = request.params or {}
-    material_name = params.get("material_name")
-    node_names = params.get("node_names", None)
-
     if not material_name:
-        return ActionResponse(
-            success=False,
-            message="material_name is required",
-            data={},
-        )
+        return {"success": False, "message": "material_name is required", "data": {}}
 
     rt = get_runtime()
 
@@ -47,11 +31,7 @@ def run(request: ActionRequest) -> ActionResponse:
                 break
 
     if mat is None:
-        return ActionResponse(
-            success=False,
-            message=f"Material not found: {material_name}",
-            data={},
-        )
+        return {"success": False, "message": f"Material not found: {material_name}", "data": {}}
 
     # Get target nodes
     if node_names:
@@ -62,11 +42,7 @@ def run(request: ActionRequest) -> ActionResponse:
         nodes = list(rt.selection)
 
     if not nodes:
-        return ActionResponse(
-            success=False,
-            message="No nodes to apply material to",
-            data={},
-        )
+        return {"success": False, "message": "No nodes to apply material to", "data": {}}
 
     # Apply material
     applied_count = 0
@@ -74,11 +50,11 @@ def run(request: ActionRequest) -> ActionResponse:
         node.material = mat
         applied_count += 1
 
-    return ActionResponse(
-        success=True,
-        message=f"Applied material '{material_name}' to {applied_count} node(s)",
-        data={
+    return {
+        "success": True,
+        "message": f"Applied material '{material_name}' to {applied_count} node(s)",
+        "data": {
             "material_name": material_name,
             "applied_count": applied_count,
         },
-    )
+    }

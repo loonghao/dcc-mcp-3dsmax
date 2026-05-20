@@ -4,9 +4,9 @@
 # Prerequisites: Rust (cargo) on PATH, Git, optional vx on PATH for stubgen fallback.
 #
 # Usage:
-#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2025
-#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2025 -CoreRepo G:\path\to\dcc-mcp-core
-#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2025 -LaunchMax
+#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2024
+#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2024 -CoreRepo G:\path\to\dcc-mcp-core
+#   .\tools\max-dev-build-link-core-win.ps1 -MaxVersion 2024 -LaunchMax
 #
 # Environment:
 #   DCC_MCP_CORE_REPO — override path to dcc-mcp-core (default: sibling of this git repo)
@@ -15,7 +15,7 @@
 # then symlink both dcc_mcp_core and dcc_mcp_3dsmax into 3ds Max's scripts directory.
 
 param(
-    [string]$MaxVersion = "2025",
+    [string]$MaxVersion = "2024",
     [string]$CoreRepo = "",
     [switch]$SkipBuild,
     [switch]$LaunchMax
@@ -155,6 +155,7 @@ $ScriptsDir = Join-Path $env:APPDATA "Autodesk\3ds Max $MaxVersion\scripts"
 $Target = Join-Path $ScriptsDir "dcc_mcp_3dsmax"
 $Pkg3dsMax = Join-Path $MaxRoot "src\dcc_mcp_3dsmax"
 $PkgCore = Join-Path $CoreRepo "python\dcc_mcp_core"
+$PkgCoreParent = Join-Path $CoreRepo "python"
 
 if (-not (Test-Path $Pkg3dsMax)) { Write-Error "Missing $Pkg3dsMax" }
 if (-not $SkipBuild -and -not (Test-Path $PkgCore)) { Write-Error "Missing $PkgCore — build core first (remove -SkipBuild)" }
@@ -176,8 +177,8 @@ try {
 # For dcc_mcp_core, create a .pth file in scripts directory to add to sys.path
 $corePthPath = Join-Path $ScriptsDir "dcc_mcp_core.pth"
 try {
-    $PkgCore | Out-File -FilePath $corePthPath -Encoding ASCII
-    Write-Host "   ✅ Created $corePthPath (adds dcc_mcp_core to sys.path)" -ForegroundColor Green
+    $PkgCoreParent | Out-File -FilePath $corePthPath -Encoding ASCII
+    Write-Host "   ✅ Created $corePthPath (adds dcc_mcp_core parent to sys.path)" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️  Cannot create .pth file: $_" -ForegroundColor Yellow
     
@@ -202,7 +203,7 @@ import sys
 from pathlib import Path
 
 # Add dcc_mcp_core to path
-core_path = r"$PkgCore"
+core_path = r"$PkgCoreParent"
 if core_path not in sys.path:
     sys.path.insert(0, core_path)
 
@@ -216,6 +217,9 @@ except ImportError as e:
 try:
     import dcc_mcp_3dsmax
     print("✓ dcc_mcp_3dsmax loaded")
+    dcc_mcp_3dsmax.install_menu()
+    dcc_mcp_3dsmax.install_shutdown_callback()
+    print("✓ dcc-mcp-3dsmax menu and shutdown callback installed")
 except ImportError as e:
     print(f"✗ Failed to import dcc_mcp_3dsmax: {e}")
 "@
@@ -230,9 +234,10 @@ try {
 Write-Host ""
 Write-Host "Done. Start 3ds Max $MaxVersion and in MAXScript Listener run:" -ForegroundColor Cyan
 Write-Host "   python.ExecuteFile @\"$StartupScript\"" -ForegroundColor Gray
+Write-Host "This installs the DCC MCP menu; use DCC MCP > Start Sidecar to start the bridge." -ForegroundColor Gray
 Write-Host ""
 Write-Host "MCP (Streamable HTTP, default):" -ForegroundColor Cyan
-Write-Host "   http://127.0.0.1:8765/mcp"
+Write-Host "   http://127.0.0.1:9765/mcp"
 Write-Host "Docs: See dcc-mcp-3dsmax docs for Cursor/3ds Max MCP setup" -ForegroundColor Gray
 
 if ($LaunchMax -and (Test-Path $MaxExe)) {

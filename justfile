@@ -4,6 +4,7 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 set shell := ["bash", "-c"]
 set dotenv-load := true
+set quiet := true
 
 # Default recipe
 default:
@@ -89,6 +90,12 @@ default:
     echo "🧪 Running quick tests..."
     python -m pytest tests/ -x -q
     echo "✅ Quick tests passed"
+
+# Run sidecar protocol tests that do not require 3ds Max
+@test-sidecar:
+    echo "🧪 Running sidecar bridge tests..."
+    python -m pytest tests/test_basic.py -k Sidecar -v
+    echo "✅ Sidecar tests passed"
 
 # Run tests with coverage
 @test-coverage:
@@ -212,8 +219,11 @@ default:
 # 3ds Max Local Development
 # ============================================================================
 
-# 3ds Max version for local dev (override: just max-version=2025 max-link)
-max-version := env("MAX_VERSION", "2025")
+# 3ds Max version for local dev (defaults to local 2024 install; override with MAX_VERSION or max-version=...)
+max-version := env("MAX_VERSION", "2024")
+max-gateway-url := "http://127.0.0.1:9765/mcp"
+max-bridge-port := env("DCC_MCP_3DSMAX_BRIDGE_PORT", "")
+max-python-exe := env("MAX_PYTHON", "C:\\Program Files\\Autodesk\\3ds Max " + max-version + "\\Python\\python.exe")
 
 # Detect 3ds Max scripts directory (platform-aware)
 # Windows: uses ADSK_3DSMAX_<version> env var or %APPDATA%\Autodesk\3dsMax\<ver>\scripts
@@ -289,6 +299,14 @@ _3dsmax-scripts-dir := if os() == "windows" {
 @max-dev-relink-core-win:
     powershell -NoProfile -ExecutionPolicy Bypass -File tools/max-dev-build-link-core-win.ps1 -MaxVersion {{ max-version }} -SkipBuild
 
+# Install dcc-mcp-core into 3ds Max's bundled Python user site.
+@max-install-core-win:
+    if (!(Test-Path '{{ max-python-exe }}')) { Write-Host '3ds Max Python not found: {{ max-python-exe }}'; exit 1 }; & '{{ max-python-exe }}' -m ensurepip --user; & '{{ max-python-exe }}' -m pip install --user 'dcc-mcp-core==0.17.16' 'dcc-mcp-server==0.17.16'; & '{{ max-python-exe }}' -c "import sys; sys.path.insert(0, r'{{ invocation_directory() }}\src'); import dcc_mcp_core; print('dcc_mcp_core', dcc_mcp_core.__version__); from dcc_mcp_3dsmax.max_bootstrap import _server_binary_path; p=_server_binary_path(); print('dcc_mcp_server', p)"
+
+# Verify 3ds Max's bundled Python can import core and this adapter.
+@max-verify-python-win:
+    if (!(Test-Path '{{ max-python-exe }}')) { Write-Host '3ds Max Python not found: {{ max-python-exe }}'; exit 1 }; & '{{ max-python-exe }}' -c "import sys; sys.path.insert(0, r'{{ invocation_directory() }}\src'); import dcc_mcp_core; print('dcc_mcp_core', dcc_mcp_core.__version__); from dcc_mcp_3dsmax.max_bootstrap import _server_binary_path; p=_server_binary_path(); print('dcc_mcp_server', p); import subprocess; subprocess.run([str(p), '--version'], check=True); import dcc_mcp_3dsmax; print('dcc_mcp_3dsmax ok')"
+
 # Remove dev symlinks
 @max-unlink:
     #!/usr/bin/env bash
@@ -349,3 +367,45 @@ max-dev: max-link verify-deps
     @echo "   Verify with:"
     @echo "     just max-status       # Unix/macOS"
     @echo "     just max-status-win   # Windows"
+
+# Print the command used to start the sidecar bridge inside 3ds Max
+@max-sidecar-command:
+    @Write-Host 'Run this in the 3ds Max MAXScript Listener:'
+    @Write-Host 'python.ExecuteFile @"{{ invocation_directory() }}\examples\start_sidecar_bridge.py"'
+    @Write-Host ''
+    @Write-Host 'The bridge uses a random localhost port by default and prints its /dispatch URL.'
+    @Write-Host 'Stable MCP gateway: {{ max-gateway-url }}'
+
+# Alias: print the sidecar bootstrap command for quick local debugging.
+@max-debug-command: max-sidecar-command
+
+# Print the embedded MCP server command for debugging without the sidecar bridge.
+@max-embedded-command:
+    @Write-Host 'Run this in the 3ds Max MAXScript Listener:'
+    @Write-Host 'python.Execute "import sys; sys.path.insert(0, r''{{ invocation_directory() }}\src''); import dcc_mcp_3dsmax; dcc_mcp_3dsmax.start_server()"'
+    @Write-Host ''
+    @Write-Host 'MCP endpoint: {{ max-gateway-url }}'
+
+# Check the fixed MCP gateway. This only succeeds after the embedded server/gateway is running.
+@max-gateway-health:
+    $ErrorActionPreference='Stop'; try { Invoke-RestMethod '{{ max-gateway-url }}' -Method Get | ConvertTo-Json -Depth 8 } catch { Write-Host 'Gateway is not responding at {{ max-gateway-url }}'; exit 1 }
+
+# Check the sidecar bridge health. For random bridge ports, pass the port printed by 3ds Max:
+#   just max-sidecar-health 54321
+@max-sidecar-health port=max-bridge-port:
+    $port='{{ port }}'; if (-not $port) { Write-Host 'Pass the bridge port printed by 3ds Max: just max-sidecar-health <port>'; exit 1 }; Invoke-RestMethod "http://127.0.0.1:$port/health" -Method Get | ConvertTo-Json -Depth 8
+
+# Dispatch a structured action through the sidecar bridge.
+# Usage:
+#   just max-sidecar-dispatch 54321 3dsmax-modeling__create_box '{\"width\":20,\"height\":20,\"depth\":20}'
+@max-sidecar-dispatch port=max-bridge-port action="3dsmax-modeling__create_box" args='{"width":20,"height":20,"depth":20}':
+    $port='{{ port }}'; if (-not $port) { Write-Host 'Pass the bridge port printed by 3ds Max: just max-sidecar-dispatch <port>'; exit 1 }; $body = @{ action='{{ action }}'; args=(ConvertFrom-Json '{{ args }}'); request_id=[guid]::NewGuid().ToString() } | ConvertTo-Json -Depth 8; Invoke-RestMethod "http://127.0.0.1:$port/dispatch" -Method Post -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 8
+
+# Convenience: create a box through the sidecar bridge.
+# Usage: just max-sidecar-box 54321
+@max-sidecar-box port=max-bridge-port:
+    $port='{{ port }}'; if (-not $port) { Write-Host 'Pass the bridge port printed by 3ds Max: just max-sidecar-box <port>'; exit 1 }; $body = @{ action='3dsmax-modeling__create_box'; args=@{ width=20; height=20; depth=20 }; request_id=[guid]::NewGuid().ToString() } | ConvertTo-Json -Depth 8; Invoke-RestMethod "http://127.0.0.1:$port/dispatch" -Method Post -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 8
+
+# Print all local 3ds Max debugging commands.
+@max-debug-help:
+    @python -c "print('3ds Max local debug commands:'); print('  just max-install-core-win           # install dcc-mcp-core into 3ds Max Python'); print('  just max-verify-python-win          # verify 3ds Max Python imports'); print('  just max-sidecar-command            # copy/paste into MAXScript Listener'); print('  just max-embedded-command           # embedded server, no sidecar'); print('  just max-sidecar-health <port>      # health check for printed bridge port'); print('  just max-sidecar-box <port>         # create a test box through sidecar'); print('  just max-gateway-health             # check {{ max-gateway-url }}'); print(); print('Port model:'); print('  sidecar bridge: random by default'); print('  3ds Max instance: random by default'); print('  MCP gateway: {{ max-gateway-url }}')"

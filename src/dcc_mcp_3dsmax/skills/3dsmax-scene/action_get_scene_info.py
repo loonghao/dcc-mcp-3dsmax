@@ -11,11 +11,8 @@ from dcc_mcp_3dsmax.api import max_success, with_max
 
 
 @with_max
-def execute(params: Dict[str, Any]) -> Dict[str, Any]:
+def main() -> Dict[str, Any]:
     """Get basic information about the current scene.
-
-    Args:
-        params: Dictionary with no required parameters.
 
     Returns:
         Dictionary with scene information.

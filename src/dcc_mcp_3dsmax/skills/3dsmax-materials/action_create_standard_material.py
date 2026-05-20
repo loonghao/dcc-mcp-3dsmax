@@ -3,32 +3,26 @@
 # Import future modules
 from __future__ import annotations
 
-# Import third-party modules
-from dcc_mcp_core.actions import ActionRequest, ActionResponse
-
 # Import local modules
-from dcc_mcp_3dsmax.api import get_runtime, max_success, with_max
+from dcc_mcp_3dsmax.api import get_runtime, with_max
 
 
 @with_max
-def run(request: ActionRequest) -> ActionResponse:
+def main(
+    name: str = "StandardMat",
+    diffuse: list = None,
+    specular: list = None,
+    glossiness: float = 10.0,
+) -> dict:
     """Create a Standard material with the given parameters.
-
-    Parameters
-    ----------
-    request : ActionRequest
-        The action request containing parameters.
 
     Returns
     -------
-    ActionResponse
+    dict
         The action response.
     """
-    params = request.params or {}
-    name = params.get("name", "StandardMat")
-    diffuse = params.get("diffuse", [255, 255, 255])
-    specular = params.get("specular", [255, 255, 255])
-    glossiness = params.get("glossiness", 10.0)
+    diffuse = diffuse or [255, 255, 255]
+    specular = specular or [255, 255, 255]
 
     rt = get_runtime()
 
@@ -38,13 +32,13 @@ def run(request: ActionRequest) -> ActionResponse:
     mat.specular = rt.color(specular[0], specular[1], specular[2])
     mat.glossiness = glossiness
 
-    return ActionResponse(
-        success=True,
-        message=f"Created material: {name}",
-        data={
+    return {
+        "success": True,
+        "message": f"Created material: {name}",
+        "data": {
             "material_name": name,
             "diffuse": diffuse,
             "specular": specular,
             "glossiness": glossiness,
         },
-    )
+    }

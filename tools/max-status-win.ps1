@@ -1,6 +1,6 @@
 # max-status-win.ps1
 # Show current 3ds Max dev link status
-# Usage: just max-status-win  or  powershell -File tools/max-status-win.ps1 -MaxVersion 2025
+# Usage: just max-status-win  or  powershell -File tools/max-status-win.ps1 -MaxVersion 2024
 
 param(
     [string]$MaxVersion = $env:MAX_VERSION
@@ -8,7 +8,7 @@ param(
 
 # Default 3ds Max version
 if ([string]::IsNullOrEmpty($MaxVersion)) {
-    $MaxVersion = "2025"
+    $MaxVersion = "2024"
 }
 
 # Detect 3ds Max scripts directory

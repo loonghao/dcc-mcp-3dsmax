@@ -73,6 +73,31 @@ class MaxStandaloneDispatcher:
                 "error": str(exc),
             }
 
+    def dispatch_callable(
+        self,
+        func: Callable[..., Any],
+        *args: Any,
+        affinity: str = "any",
+        context: Any = None,
+        action_name: Optional[str] = None,
+        skill_name: Optional[str] = None,
+        execution: Optional[str] = None,
+        timeout_hint_secs: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run a callable directly using the core dispatcher protocol."""
+        _ = (context, skill_name, execution)
+        timeout_ms = timeout_hint_secs * 1000 if timeout_hint_secs is not None else None
+        result = self.submit_callable(
+            request_id=action_name or "dispatch",
+            task=lambda: func(*args, **kwargs),
+            affinity=affinity,
+            timeout_ms=timeout_ms,
+        )
+        if not result.get("success", True):
+            raise RuntimeError(result.get("error") or "dispatch_callable failed")
+        return result.get("output")
+
     def submit_async_callable(
         self,
         request_id: str,

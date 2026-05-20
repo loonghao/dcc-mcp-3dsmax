@@ -1,4 +1,4 @@
-"""Example: Start dcc-mcp-3dsmax server inside 3ds Max.
+r"""Example: Start dcc-mcp-3dsmax server inside 3ds Max.
 
 Run this script in the 3ds Max MAXScript Listener:
 
@@ -13,10 +13,10 @@ import dcc_mcp_3dsmax
 
 # Start the MCP server
 print("Starting dcc-mcp-3dsmax server...")
-server = dcc_mcp_3dsmax.start_server(port=8765)
+server = dcc_mcp_3dsmax.start_server()
 
 print(f"Server started on port {server.port}")
-print(f"MCP endpoint: http://127.0.0.1:{server.port}/mcp")
+print("MCP gateway: http://127.0.0.1:9765/mcp")
 
 # Discover available skills
 print("\nDiscovering skills...")
