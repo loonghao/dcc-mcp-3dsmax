@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.2...v0.1.3) (2026-05-21)
+
+
+### Features
+
+* support install and uninstall actions in mzp drag dialog ([0600579](https://github.com/loonghao/dcc-mcp-3dsmax/commit/060057904d2f416852623336e6eb4086e92c6862))
+
+
+### Bug Fixes
+
+* stop sidecar before mzp uninstall ([b8b5c70](https://github.com/loonghao/dcc-mcp-3dsmax/commit/b8b5c704cd17040fc4fe3abe03f1221fff8dc55f))
+
 ## [0.1.2](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.1...v0.1.2) (2026-05-20)
 
 
