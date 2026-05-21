@@ -202,28 +202,66 @@ def write_install_script(package_root: Path, version: str) -> None:
     local sourceRoot = _dccMcpNormalizePath (getFilenamePath (getSourceFileName()))
     local userScripts = _dccMcpNormalizePath (getDir #userScripts)
     local userStartupScripts = _dccMcpNormalizePath (getDir #userStartupScripts)
-    local py = ""
+    fn _dccMcpInstall =
+    (
+        local py = ""
+        py += "from pathlib import Path\\n"
+        py += "import shutil, sys\\n"
+        py += "source = Path(r'''" + sourceRoot + "''')\\n"
+        py += "install_dir = Path(r'''" + userScripts + "''') / 'dcc_mcp_3dsmax'\\n"
+        py += "startup_dir = Path(r'''" + userStartupScripts + "''')\\n"
+        py += "if install_dir.exists():\\n"
+        py += "    shutil.rmtree(install_dir)\\n"
+        py += "shutil.copytree(source / 'payload', install_dir)\\n"
+        py += "startup_dir.mkdir(parents=True, exist_ok=True)\\n"
+        py += "shutil.copy2(install_dir / 'startup' / 'dcc_mcp_3dsmax_startup.ms', startup_dir / 'dcc_mcp_3dsmax_startup.ms')\\n"
+        py += "pkg = install_dir / ('python37' if sys.version_info < (3, 8) else 'python')\\n"
+        py += "if str(pkg) not in sys.path:\\n"
+        py += "    sys.path.insert(0, str(pkg))\\n"
+        py += "import dcc_mcp_3dsmax\\n"
+        py += "dcc_mcp_3dsmax.install_menu()\\n"
+        py += "dcc_mcp_3dsmax.install_shutdown_callback()\\n"
+        py += "print('Installed dcc-mcp-3dsmax', dcc_mcp_3dsmax.__version__, 'to', install_dir)\\n"
+        python.Execute py
+        messageBox "dcc-mcp-3dsmax installed. Restart 3ds Max, then use the DCC MCP menu." title:"dcc-mcp-3dsmax"
+    )
 
-    py += "from pathlib import Path\\n"
-    py += "import shutil, sys\\n"
-    py += "source = Path(r'''" + sourceRoot + "''')\\n"
-    py += "install_dir = Path(r'''" + userScripts + "''') / 'dcc_mcp_3dsmax'\\n"
-    py += "startup_dir = Path(r'''" + userStartupScripts + "''')\\n"
-    py += "if install_dir.exists():\\n"
-    py += "    shutil.rmtree(install_dir)\\n"
-    py += "shutil.copytree(source / 'payload', install_dir)\\n"
-    py += "startup_dir.mkdir(parents=True, exist_ok=True)\\n"
-    py += "shutil.copy2(install_dir / 'startup' / 'dcc_mcp_3dsmax_startup.ms', startup_dir / 'dcc_mcp_3dsmax_startup.ms')\\n"
-    py += "pkg = install_dir / ('python37' if sys.version_info < (3, 8) else 'python')\\n"
-    py += "if str(pkg) not in sys.path:\\n"
-    py += "    sys.path.insert(0, str(pkg))\\n"
-    py += "import dcc_mcp_3dsmax\\n"
-    py += "dcc_mcp_3dsmax.install_menu()\\n"
-    py += "dcc_mcp_3dsmax.install_shutdown_callback()\\n"
-    py += "print('Installed dcc-mcp-3dsmax', dcc_mcp_3dsmax.__version__, 'to', install_dir)\\n"
+    fn _dccMcpUninstall =
+    (
+        local py = ""
+        py += "from pathlib import Path\\n"
+        py += "import shutil\\n"
+        py += "install_dir = Path(r'''" + userScripts + "''') / 'dcc_mcp_3dsmax'\\n"
+        py += "startup_script = Path(r'''" + userStartupScripts + "''') / 'dcc_mcp_3dsmax_startup.ms'\\n"
+        py += "if install_dir.exists():\\n"
+        py += "    shutil.rmtree(install_dir)\\n"
+        py += "if startup_script.exists():\\n"
+        py += "    startup_script.unlink()\\n"
+        py += "print('Uninstalled dcc-mcp-3dsmax from', install_dir)\\n"
+        python.Execute py
+        messageBox "dcc-mcp-3dsmax uninstalled. Restart 3ds Max to refresh menus." title:"dcc-mcp-3dsmax"
+    )
 
-    python.Execute py
-    messageBox "dcc-mcp-3dsmax installed. Restart 3ds Max, then use the DCC MCP menu." title:"dcc-mcp-3dsmax"
+    rollout dccMcpInstaller "dcc-mcp-3dsmax" width:280 height:110
+    (
+        label infoLbl "Choose an action for dcc-mcp-3dsmax:" pos:[20,16]
+        button installBtn "Install" width:110 height:28 pos:[20,50]
+        button uninstallBtn "Uninstall" width:110 height:28 pos:[145,50]
+
+        on installBtn pressed do
+        (
+            destroyDialog dccMcpInstaller
+            _dccMcpInstall()
+        )
+
+        on uninstallBtn pressed do
+        (
+            destroyDialog dccMcpInstaller
+            _dccMcpUninstall()
+        )
+    )
+
+    createDialog dccMcpInstaller style:#(#style_titlebar, #style_border, #style_sysmenu)
 )
 """,
         encoding="utf-8",

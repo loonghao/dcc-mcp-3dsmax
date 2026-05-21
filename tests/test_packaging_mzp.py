@@ -46,6 +46,9 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "source = Path(r'''" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
+    assert "button installBtn \"Install\"" in text
+    assert "button uninstallBtn \"Uninstall\"" in text
+    assert "startup_script.unlink()" in text
 
 
 def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
