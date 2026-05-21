@@ -48,6 +48,9 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
     assert "button installBtn \"Install\"" in text
     assert "button uninstallBtn \"Uninstall\"" in text
+    assert "dcc_mcp_3dsmax.stop_sidecar_bridge()" in text
+    assert "Failed to stop dcc-mcp-3dsmax sidecar before uninstall" in text
+    assert "dcc-mcp-3dsmax uninstall failed:" in text
     assert "startup_script.unlink()" in text
 
 

@@ -230,16 +230,33 @@ def write_install_script(package_root: Path, version: str) -> None:
     (
         local py = ""
         py += "from pathlib import Path\\n"
-        py += "import shutil\\n"
+        py += "import shutil, sys\\n"
         py += "install_dir = Path(r'''" + userScripts + "''') / 'dcc_mcp_3dsmax'\\n"
         py += "startup_script = Path(r'''" + userStartupScripts + "''') / 'dcc_mcp_3dsmax_startup.ms'\\n"
+        py += "pkg = install_dir / ('python37' if sys.version_info < (3, 8) else 'python')\\n"
+        py += "if str(pkg) not in sys.path:\\n"
+        py += "    sys.path.insert(0, str(pkg))\\n"
+        py += "try:\\n"
+        py += "    import dcc_mcp_3dsmax\\n"
+        py += "    dcc_mcp_3dsmax.stop_sidecar_bridge()\\n"
+        py += "except ModuleNotFoundError:\\n"
+        py += "    pass\\n"
+        py += "except Exception as exc:\\n"
+        py += "    raise RuntimeError('Failed to stop dcc-mcp-3dsmax sidecar before uninstall: {{}}'.format(exc)) from exc\\n"
         py += "if install_dir.exists():\\n"
         py += "    shutil.rmtree(install_dir)\\n"
         py += "if startup_script.exists():\\n"
         py += "    startup_script.unlink()\\n"
         py += "print('Uninstalled dcc-mcp-3dsmax from', install_dir)\\n"
-        python.Execute py
-        messageBox "dcc-mcp-3dsmax uninstalled. Restart 3ds Max to refresh menus." title:"dcc-mcp-3dsmax"
+        try
+        (
+            python.Execute py
+            messageBox "dcc-mcp-3dsmax uninstalled. Restart 3ds Max to refresh menus." title:"dcc-mcp-3dsmax"
+        )
+        catch
+        (
+            messageBox ("dcc-mcp-3dsmax uninstall failed:\\n" + getCurrentException()) title:"dcc-mcp-3dsmax"
+        )
     )
 
     rollout dccMcpInstaller "dcc-mcp-3dsmax" width:280 height:110
