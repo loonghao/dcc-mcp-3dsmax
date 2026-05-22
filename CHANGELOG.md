@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.3...v0.1.4) (2026-05-22)
+
+
+### Features
+
+* support versioned installer bootstrap ([230dcab](https://github.com/loonghao/dcc-mcp-3dsmax/commit/230dcabbbf09b97bd7902b97d30647acf31cb6d9))
+
 ## [0.1.3](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.2...v0.1.3) (2026-05-21)
 
 
