@@ -36,6 +36,34 @@ The sidecar uses the default `dcc-mcp-server` registry. Set
 `DCC_MCP_REGISTRY_DIR` externally only when the whole local gateway stack needs
 to share a non-default registry directory.
 
+## Rez / Pipeline Bootstrap
+
+For managed deployments, the startup script can use package roots from the
+launch environment instead of a copied MZP payload. This lets a Rez launcher
+keep packages in a central/cache layout and only install a thin startup hook in
+3ds Max.
+
+Supported variables:
+
+- `DCC_MCP_3DSMAX_BOOTSTRAP_PATHS`: semicolon-separated Python import roots.
+- `DCC_MCP_PYTHONPATHS`: shared semicolon-separated Python import roots.
+- `DCC_MCP_3DSMAX_ROOT`: adapter package root.
+- `DCC_MCP_CORE_ROOT`: `dcc-mcp-core` package root.
+- `DCC_MCP_SERVER_ROOT`: `dcc-mcp-server` package root.
+- `DCC_MCP_SERVER_BIN`: explicit `dcc-mcp-server` executable path.
+
+For each root variable, startup probes `python37/` when running older 3ds Max
+Python, then `python/`, `src/`, and the root itself. A package cache such as:
+
+```text
+<package-cache>/dcc_mcp_core
+<package-cache>/dcc_mcp_3dsmax
+<package-cache>/dcc_mcp_server
+```
+
+can therefore be exposed directly by the launcher without copying files into
+the user's scripts directory.
+
 ## 3ds Max Menu
 
 Startup installs a `DCC MCP` menu in the main menu bar with:

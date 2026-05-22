@@ -44,12 +44,19 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "local userScripts = _dccMcpNormalizePath (getDir #userScripts)" in text
     assert "local userStartupScripts = _dccMcpNormalizePath (getDir #userStartupScripts)" in text
     assert "source = Path(r'''" in text
+    assert "versions_dir = install_dir / 'versions'" in text
+    assert "current_file = install_dir / 'current.txt'" in text
+    assert "version_name = '1.2.3'" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
     assert "button installBtn \"Install\"" in text
     assert "button uninstallBtn \"Uninstall\"" in text
     assert "dcc_mcp_3dsmax.stop_sidecar_bridge()" in text
+    assert "sys.modules.pop(name, None)" in text
+    assert "installed as an isolated version" in text
+    assert "dcc-mcp-3dsmax install failed:" in text
     assert "Failed to stop dcc-mcp-3dsmax sidecar before uninstall" in text
+    assert "uninstall requires a 3ds Max restart" in text
     assert "dcc-mcp-3dsmax uninstall failed:" in text
     assert "startup_script.unlink()" in text
 
@@ -62,6 +69,12 @@ def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
 
     text = (tmp_path / "startup" / "dcc_mcp_3dsmax_startup.ms").read_text(encoding="utf-8")
     assert "local installRoot = _dccMcpNormalizePath" in text
+    assert "DCC_MCP_3DSMAX_BOOTSTRAP_PATHS" in text
+    assert "DCC_MCP_3DSMAX_ROOT" in text
+    assert "DCC_MCP_CORE_ROOT" in text
+    assert "DCC_MCP_SERVER_ROOT" in text
+    assert "current = current_file.read_text" in text
+    assert "root / 'versions' / current" in text
     assert "sys.path.insert(0, str(pkg))" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text

@@ -36,6 +36,7 @@ from dcc_mcp_core.server_base import DccServerBase
 # Import local modules
 from dcc_mcp_3dsmax import _env, _executor
 from dcc_mcp_3dsmax.__version__ import __version__
+from dcc_mcp_3dsmax._constants import DEFAULT_GATEWAY_PORT
 from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,6 @@ logger = logging.getLogger(__name__)
 SERVER_NAME = "dcc-mcp-3dsmax"
 SERVER_VERSION = __version__
 DEFAULT_PORT = 0
-DEFAULT_GATEWAY_PORT = 9765
 
 # Built-in skills directory shipped with this package
 _BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
