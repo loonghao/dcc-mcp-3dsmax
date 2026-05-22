@@ -11,10 +11,8 @@ import sysconfig
 from pathlib import Path
 from typing import Any, Optional
 
-from dcc_mcp_core import HostExecutionBridge
-
 from dcc_mcp_3dsmax.__version__ import __version__
-from dcc_mcp_3dsmax.server import DEFAULT_GATEWAY_PORT, start_server
+from dcc_mcp_3dsmax._constants import DEFAULT_GATEWAY_PORT
 from dcc_mcp_3dsmax.sidecar.bridge import execute_on_main_thread, start_bridge, stop_bridge
 from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, stop_qt_bridge
 
@@ -25,6 +23,8 @@ _cleanup_registered = False
 
 def start_embedded_server(port: Optional[int] = None, **kwargs: Any) -> Any:
     """Start the embedded MCP HTTP server inside 3ds Max."""
+    from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
+
     resolved_port = int(port if port is not None else os.environ.get("DCC_MCP_3DSMAX_PORT", "0"))
     kwargs.setdefault("gateway_port", DEFAULT_GATEWAY_PORT)
     return start_server(port=resolved_port, **kwargs)
@@ -139,6 +139,10 @@ def start_embedded_sidecar_bridge(
     include_bundled: bool = True,
 ) -> Any:
     """Legacy embedded MCP server path retained for direct in-process tests."""
+    from dcc_mcp_core import HostExecutionBridge  # noqa: PLC0415
+
+    from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
+
     bridge = start_bridge(bridge_port)
     execution_bridge = HostExecutionBridge(
         runner=_run_skill_script_via_bridge,
@@ -170,10 +174,24 @@ def _server_binary_path() -> Path:
             return path
 
     binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
-    candidates = [
-        Path(sysconfig.get_path("scripts") or "") / binary_name,
-        Path(site.USER_BASE) / ("Scripts" if os.name == "nt" else "bin") / binary_name,
-    ]
+    candidates = []
+    server_root = os.environ.get("DCC_MCP_SERVER_ROOT")
+    if server_root:
+        root = Path(server_root).expanduser()
+        candidates.extend(
+            [
+                root / binary_name,
+                root / "bin" / binary_name,
+                root / "scripts" / binary_name,
+                root / "Scripts" / binary_name,
+            ]
+        )
+    candidates.extend(
+        [
+            Path(sysconfig.get_path("scripts") or "") / binary_name,
+            Path(site.USER_BASE) / ("Scripts" if os.name == "nt" else "bin") / binary_name,
+        ]
+    )
     try:
         user_site = Path(site.getusersitepackages())
         candidates.append(user_site.parent / ("Scripts" if os.name == "nt" else "bin") / binary_name)
@@ -191,7 +209,7 @@ def _server_binary_path() -> Path:
     except Exception as exc:  # noqa: BLE001
         raise FileNotFoundError(
             "dcc-mcp-server binary not found. Run `just max-install-core-win` "
-            "or set DCC_MCP_SERVER_BIN."
+            "or set DCC_MCP_SERVER_BIN / DCC_MCP_SERVER_ROOT."
         ) from exc
 
 

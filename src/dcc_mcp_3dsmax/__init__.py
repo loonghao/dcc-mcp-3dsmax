@@ -29,6 +29,10 @@ Skill authoring helpers (for 3ds Max skills developers):
 # Import future modules
 from __future__ import annotations
 
+# Import built-in modules
+from importlib import import_module
+from typing import Any
+
 # Import local modules
 from dcc_mcp_3dsmax.__version__ import __version__
 from dcc_mcp_3dsmax._env import (
@@ -66,19 +70,37 @@ from dcc_mcp_3dsmax.capabilities import (
     get_3dsmax_capabilities,
     get_3dsmax_capabilities_dict,
 )
-from dcc_mcp_3dsmax.max_bootstrap import start_sidecar_bridge, stop_sidecar_bridge
-from dcc_mcp_3dsmax.menu import install_menu, install_shutdown_callback
-from dcc_mcp_3dsmax.server import (
-    DEFAULT_GATEWAY_PORT,
-    DEFAULT_PORT,
-    SERVER_NAME,
-    MaxMcpServer,
-    MaxServerOptions,
-    get_server,
-    prepare_server,
-    start_server,
-    stop_server,
-)
+
+_LAZY_EXPORTS = {
+    "start_sidecar_bridge": ("dcc_mcp_3dsmax.max_bootstrap", "start_sidecar_bridge"),
+    "stop_sidecar_bridge": ("dcc_mcp_3dsmax.max_bootstrap", "stop_sidecar_bridge"),
+    "install_menu": ("dcc_mcp_3dsmax.menu", "install_menu"),
+    "install_shutdown_callback": ("dcc_mcp_3dsmax.menu", "install_shutdown_callback"),
+    "MaxMcpServer": ("dcc_mcp_3dsmax.server", "MaxMcpServer"),
+    "MaxServerOptions": ("dcc_mcp_3dsmax.server", "MaxServerOptions"),
+    "start_server": ("dcc_mcp_3dsmax.server", "start_server"),
+    "stop_server": ("dcc_mcp_3dsmax.server", "stop_server"),
+    "get_server": ("dcc_mcp_3dsmax.server", "get_server"),
+    "prepare_server": ("dcc_mcp_3dsmax.server", "prepare_server"),
+    "DEFAULT_GATEWAY_PORT": ("dcc_mcp_3dsmax.server", "DEFAULT_GATEWAY_PORT"),
+    "DEFAULT_PORT": ("dcc_mcp_3dsmax.server", "DEFAULT_PORT"),
+    "SERVER_NAME": ("dcc_mcp_3dsmax.server", "SERVER_NAME"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve heavier runtime exports only when callers actually use them."""
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = target
+    value = getattr(import_module(module_name), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_EXPORTS))
 
 __all__ = [
     "__version__",

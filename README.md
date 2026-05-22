@@ -79,7 +79,22 @@ def main(width: float = 100.0, height: float = 100.0, depth: float = 100.0) -> d
 | `DCC_MCP_3DSMAX_ENABLE_GATEWAY_FAILOVER` | Enable gateway failover | `1` |
 | `DCC_MCP_3DSMAX_SKILL_PATHS` | Extra skill search paths (semicolon-separated) | None |
 | `DCC_MCP_3DSMAX_BRIDGE_PORT` | Sidecar bridge localhost port | random |
+| `DCC_MCP_3DSMAX_BOOTSTRAP_PATHS` | Extra package Python roots for startup bootstrapping | None |
+| `DCC_MCP_PYTHONPATHS` | Shared package Python roots for Rez/pipeline launchers | None |
+| `DCC_MCP_3DSMAX_ROOT` | Adapter package root; startup probes `python`, `python37`, `src`, and root | None |
+| `DCC_MCP_CORE_ROOT` | `dcc-mcp-core` package root; startup probes `python`, `python37`, `src`, and root | None |
+| `DCC_MCP_SERVER_ROOT` | `dcc-mcp-server` package root; startup probes Python roots and sidecar binary locations | None |
+| `DCC_MCP_SERVER_BIN` | Explicit `dcc-mcp-server` executable path | auto-detect |
 | `DCC_MCP_REGISTRY_DIR` | Optional shared gateway/sidecar registry override | core default |
+
+For Rez-style deployment, launch 3ds Max with package roots in the environment
+instead of copying packages into the user scripts folder. A pipeline package
+cache can expose paths such as `<package-cache>/dcc_mcp_core`,
+`<package-cache>/dcc_mcp_3dsmax`, and `<package-cache>/dcc_mcp_server`
+through the root variables above.
+The MZP installer uses isolated version directories under
+`<user scripts>/dcc_mcp_3dsmax/versions/`, so installing a new payload does not
+delete the version that may already be loaded by the running 3ds Max process.
 
 ## Requirements
 

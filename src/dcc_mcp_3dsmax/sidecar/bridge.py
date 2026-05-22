@@ -10,8 +10,6 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Mapping, Optional
 
-from dcc_mcp_3dsmax.sidecar._dispatcher import dispatch_payload
-
 DEFAULT_BRIDGE_PORT = 0
 ENV_BRIDGE_PORT = "DCC_MCP_3DSMAX_BRIDGE_PORT"
 _PUMP_NAME = "_dcc_mcp_3dsmax_bridge_process_pending"
@@ -56,6 +54,8 @@ def bridge_status() -> dict:
 
 def process_pending_requests() -> int:
     """Drain queued requests. Called by a hidden 3ds Max timer on the UI thread."""
+    from dcc_mcp_3dsmax.sidecar._dispatcher import dispatch_payload  # noqa: PLC0415
+
     executed = 0
     while True:
         try:
@@ -79,6 +79,8 @@ def process_pending_requests() -> int:
 def execute_on_main_thread(payload: Mapping[str, Any], timeout: float = 30.0) -> str:
     """Execute *payload* on the 3ds Max main thread when pymxs is available."""
     if _RT is None:
+        from dcc_mcp_3dsmax.sidecar._dispatcher import dispatch_payload  # noqa: PLC0415
+
         return dispatch_payload(payload)
 
     request = BridgeRequest(payload)

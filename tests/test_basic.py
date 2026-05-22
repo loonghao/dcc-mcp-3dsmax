@@ -1,6 +1,8 @@
 """Basic tests for dcc-mcp-3dsmax."""
 
 # Import built-in modules
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,6 +19,51 @@ class TestImports:
 
         assert hasattr(dcc_mcp_3dsmax, "__version__")
         assert dcc_mcp_3dsmax.__version__ != ""
+
+    def test_import_package_keeps_core_native_extension_lazy(self):
+        """Menu-only startup imports should not lock dcc_mcp_core._core.pyd."""
+        env = dict(os.environ)
+        src = Path(__file__).parent.parent / "src"
+        env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
+        code = (
+            "import sys\n"
+            "import dcc_mcp_3dsmax\n"
+            "dcc_mcp_3dsmax.install_menu\n"
+            "dcc_mcp_3dsmax.install_shutdown_callback\n"
+            "print('dcc_mcp_core' in sys.modules)\n"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            check=True,
+            capture_output=True,
+            env=env,
+            text=True,
+        )
+
+        assert result.stdout.strip() == "False"
+
+    def test_stop_sidecar_hook_keeps_core_native_extension_lazy(self):
+        """Install/uninstall cleanup can stop runtime without loading core."""
+        env = dict(os.environ)
+        src = Path(__file__).parent.parent / "src"
+        env["PYTHONPATH"] = str(src) + os.pathsep + env.get("PYTHONPATH", "")
+        code = (
+            "import sys\n"
+            "import dcc_mcp_3dsmax\n"
+            "dcc_mcp_3dsmax.stop_sidecar_bridge()\n"
+            "print('dcc_mcp_core' in sys.modules)\n"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            check=True,
+            capture_output=True,
+            env=env,
+            text=True,
+        )
+
+        assert result.stdout.strip() == "False"
 
     def test_import_server(self):
         """Test importing the server module."""
@@ -158,6 +205,19 @@ class TestExecution:
 
 class TestSidecar:
     """Test structured sidecar dispatch and bridge plumbing."""
+
+    def test_server_binary_path_accepts_rez_style_server_root(self, tmp_path, monkeypatch):
+        """Pipeline package roots can provide the sidecar binary without pip install."""
+        from dcc_mcp_3dsmax.max_bootstrap import _server_binary_path
+
+        binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
+        binary = tmp_path / "bin" / binary_name
+        binary.parent.mkdir()
+        binary.write_text("stub", encoding="utf-8")
+        monkeypatch.delenv("DCC_MCP_SERVER_BIN", raising=False)
+        monkeypatch.setenv("DCC_MCP_SERVER_ROOT", str(tmp_path))
+
+        assert _server_binary_path() == binary
 
     def test_sidecar_dispatch_accepts_script_path_payload(self, tmp_path):
         """Sidecar payloads execute explicit script paths."""
