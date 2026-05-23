@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.7](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.6...v0.1.7) (2026-05-23)
+
+
+### Bug Fixes
+
+* align 3dsmax runtime defaults ([616bcbc](https://github.com/loonghao/dcc-mcp-3dsmax/commit/616bcbc3cb61144d76f83e001b2dc89587c514c2))
+* restore 3dsmax runtime startup ([72d9e8d](https://github.com/loonghao/dcc-mcp-3dsmax/commit/72d9e8d84cd1eefcc7820743a26de8febcb14349))
+
+
+### Code Refactoring
+
+* template mzp scripts ([84082b6](https://github.com/loonghao/dcc-mcp-3dsmax/commit/84082b68fec456a2e53730119855a66b23241d81))
+
 ## [0.1.6](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.5...v0.1.6) (2026-05-23)
 
 
