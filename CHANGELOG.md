@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.5...v0.1.6) (2026-05-23)
+
+
+### Bug Fixes
+
+* clean install lifecycle and autostart sidecar ([17eb473](https://github.com/loonghao/dcc-mcp-3dsmax/commit/17eb4738f30c1906c7d965e13b590e93ac6a1fd8))
+
 ## [0.1.5](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.4...v0.1.5) (2026-05-23)
 
 
