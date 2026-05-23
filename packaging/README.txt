@@ -5,6 +5,10 @@ This package installs the dcc-mcp-3dsmax Python adapter plus bundled
 dcc-mcp-core and dcc-mcp-server runtime files into the current user's
 3ds Max scripts folder.
 
+Maintained MZP scripts live in packaging/templates/. The assembler copies
+dcc_mcp_3dsmax_startup.ms into the payload and renders install.ms at package
+time.
+
 Installation
 ------------
 1. Start 3ds Max.
