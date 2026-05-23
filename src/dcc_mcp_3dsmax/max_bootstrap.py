@@ -196,6 +196,7 @@ def _server_binary_path() -> Path:
                 root / "Scripts" / binary_name,
             ]
         )
+    candidates.extend(_bundled_server_binary_candidates(binary_name))
     candidates.extend(
         [
             Path(sysconfig.get_path("scripts") or "") / binary_name,
@@ -221,6 +222,19 @@ def _server_binary_path() -> Path:
             "dcc-mcp-server binary not found. Run `just max-install-core-win` "
             "or set DCC_MCP_SERVER_BIN / DCC_MCP_SERVER_ROOT."
         ) from exc
+
+
+def _bundled_server_binary_candidates(binary_name: str) -> list[Path]:
+    try:
+        package_root = Path(__file__).resolve().parent.parent
+    except OSError:
+        return []
+    return [
+        package_root / "scripts" / binary_name,
+        package_root / "Scripts" / binary_name,
+        package_root / "bin" / binary_name,
+        package_root / binary_name,
+    ]
 
 
 def _close_sidecar_log() -> None:
