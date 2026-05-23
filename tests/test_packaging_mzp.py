@@ -6,6 +6,8 @@ import importlib.util
 import zipfile
 from pathlib import Path
 
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "packaging" / "templates"
+
 
 def _load_assembler():
     module_path = Path(__file__).resolve().parents[1] / "packaging" / "assemble_mzp.py"
@@ -21,6 +23,17 @@ def _generated_install_script(tmp_path: Path, version: str = "1.2.3") -> str:
     assembler = _load_assembler()
     assembler.write_install_script(tmp_path, version)
     return (tmp_path / "install.ms").read_text(encoding="utf-8")
+
+
+def test_mzp_scripts_are_maintained_as_templates():
+    """Long MZP scripts live as source files instead of inline assembler strings."""
+    startup = TEMPLATES_DIR / "dcc_mcp_3dsmax_startup.ms"
+    install = TEMPLATES_DIR / "install.ms"
+
+    assert startup.is_file()
+    assert install.is_file()
+    assert "dcc_mcp_3dsmax.main()" in startup.read_text(encoding="utf-8")
+    assert "{{VERSION}}" in install.read_text(encoding="utf-8")
 
 
 def test_mzp_run_is_control_file(tmp_path):
@@ -49,6 +62,7 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "versions_dir = install_dir / 'versions'" in text
     assert "current_file = install_dir / 'current.txt'" in text
     assert "version_name = '1.2.3'" in text
+    assert "{{VERSION}}" not in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
     assert "dcc_mcp_3dsmax.main()" in text
@@ -84,6 +98,7 @@ def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
     assembler.write_startup_template(tmp_path)
 
     text = (tmp_path / "startup" / "dcc_mcp_3dsmax_startup.ms").read_text(encoding="utf-8")
+    assert text == (TEMPLATES_DIR / "dcc_mcp_3dsmax_startup.ms").read_text(encoding="utf-8")
     assert "local installRoot = _dccMcpNormalizePath" in text
     assert "DCC_MCP_3DSMAX_BOOTSTRAP_PATHS" in text
     assert "DCC_MCP_3DSMAX_ROOT" in text
