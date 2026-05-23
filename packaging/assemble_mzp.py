@@ -276,8 +276,8 @@ def write_startup_template(package_root: Path) -> None:
     py += "    import dcc_mcp_3dsmax\\n"
     py += "    dcc_mcp_3dsmax.install_menu()\\n"
     py += "    dcc_mcp_3dsmax.install_shutdown_callback()\\n"
-    py += "    dcc_mcp_3dsmax.start_sidecar_bridge()\\n"
-    py += "    print('dcc-mcp-3dsmax sidecar ready:', pkg)\\n"
+    py += "    dcc_mcp_3dsmax.main()\\n"
+    py += "    print('dcc-mcp-3dsmax runtime ready:', pkg)\\n"
     python.Execute py
 )
 """,
@@ -416,7 +416,7 @@ def write_install_script(package_root: Path, version: str) -> None:
         py += "    import dcc_mcp_3dsmax\\n"
         py += "    dcc_mcp_3dsmax.install_menu()\\n"
         py += "    dcc_mcp_3dsmax.install_shutdown_callback()\\n"
-        py += "    dcc_mcp_3dsmax.start_sidecar_bridge()\\n"
+        py += "    dcc_mcp_3dsmax.main()\\n"
         py += "_stop_existing('install')\\n"
         py += "_clear_adapter_modules()\\n"
         py += "install_dir.mkdir(parents=True, exist_ok=True)\\n"
@@ -436,7 +436,7 @@ def write_install_script(package_root: Path, version: str) -> None:
         try
         (
             python.Execute py
-            messageBox "dcc-mcp-3dsmax installed and sidecar startup requested." title:"dcc-mcp-3dsmax"
+            messageBox "dcc-mcp-3dsmax installed and runtime startup requested." title:"dcc-mcp-3dsmax"
         )
         catch
         (
@@ -513,7 +513,7 @@ def write_install_script(package_root: Path, version: str) -> None:
         py += "except PermissionError as exc:\\n"
         py += "    uninstall_marker.parent.mkdir(parents=True, exist_ok=True)\\n"
         py += "    startup_dir.mkdir(parents=True, exist_ok=True)\\n"
-        py += "    uninstall_marker.write_text('pending\\n', encoding='utf-8')\\n"
+        py += "    uninstall_marker.write_text('pending\\\\n', encoding='utf-8')\\n"
         py += "    shutil.copy2(source / 'payload' / 'startup' / 'dcc_mcp_3dsmax_startup.ms', startup_script)\\n"
         py += "    print('dcc-mcp-3dsmax uninstall requires a 3ds Max restart; staged cleanup for', install_dir, 'because:', exc)\\n"
         try

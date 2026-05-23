@@ -41,16 +41,16 @@ def _menu_script() -> str:
     return r'''
 macroScript DccMcp3dsmax_StartSidecar
 category:"DCC MCP"
-buttonText:"Start Sidecar"
-tooltip:"Start dcc-mcp-3dsmax sidecar"
+buttonText:"Start Server"
+tooltip:"Start dcc-mcp-3dsmax server"
 (
-    on execute do python.Execute "import dcc_mcp_3dsmax; dcc_mcp_3dsmax.start_sidecar_bridge()"
+    on execute do python.Execute "import dcc_mcp_3dsmax; dcc_mcp_3dsmax.main()"
 )
 
 macroScript DccMcp3dsmax_StopSidecar
 category:"DCC MCP"
-buttonText:"Stop Sidecar"
-tooltip:"Stop dcc-mcp-3dsmax sidecar"
+buttonText:"Stop Server"
+tooltip:"Stop dcc-mcp-3dsmax server"
 (
     on execute do python.Execute "import dcc_mcp_3dsmax; dcc_mcp_3dsmax.stop_sidecar_bridge()"
 )

@@ -283,6 +283,54 @@ class TestSidecar:
         assert not old_log.exists()
         assert fresh_log.exists()
 
+    def test_main_defaults_to_agent_callable_embedded_runtime(self, monkeypatch):
+        """Startup scripts should register adapter tools, not just a host RPC sidecar."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        calls = []
+        monkeypatch.delenv("DCC_MCP_3DSMAX_BOOT_MODE", raising=False)
+        monkeypatch.setattr(max_bootstrap, "_register_process_cleanup", lambda: calls.append("cleanup"))
+        monkeypatch.setattr(max_bootstrap, "_install_max_integration", lambda: calls.append("menu"))
+        monkeypatch.setattr(max_bootstrap, "start_embedded_sidecar_bridge", lambda: {"mode": "embedded-runtime"})
+        monkeypatch.setattr(
+            max_bootstrap,
+            "start_sidecar_bridge",
+            lambda: (_ for _ in ()).throw(AssertionError("external sidecar should not be default")),
+        )
+
+        assert max_bootstrap.main() == {"mode": "embedded-runtime"}
+        assert calls == ["cleanup", "menu"]
+
+    def test_main_keeps_external_sidecar_as_explicit_mode(self, monkeypatch):
+        """Operators can still opt into the process-isolated sidecar mode."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        monkeypatch.setenv("DCC_MCP_3DSMAX_BOOT_MODE", "sidecar")
+        monkeypatch.setattr(max_bootstrap, "start_sidecar_bridge", lambda: {"mode": "sidecar"})
+        monkeypatch.setattr(
+            max_bootstrap,
+            "start_embedded_sidecar_bridge",
+            lambda: (_ for _ in ()).throw(AssertionError("embedded runtime should not be used")),
+        )
+
+        assert max_bootstrap.main() == {"mode": "sidecar"}
+
+    def test_stop_sidecar_bridge_stops_loaded_embedded_server(self, monkeypatch):
+        """Uninstall/shutdown cleanup stops the default embedded runtime when loaded."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        calls = []
+        fake_server = types.SimpleNamespace(stop_server=lambda: calls.append("stop_server"))
+        monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server)
+        monkeypatch.setattr(max_bootstrap, "stop_qt_bridge", lambda: calls.append("stop_qt_bridge"))
+        monkeypatch.setattr(max_bootstrap, "stop_bridge", lambda: calls.append("stop_bridge"))
+        monkeypatch.setattr(max_bootstrap, "_close_sidecar_log", lambda: calls.append("close_log"))
+        max_bootstrap._sidecar_process = None
+
+        max_bootstrap.stop_sidecar_bridge()
+
+        assert calls == ["stop_server", "close_log", "stop_qt_bridge", "stop_bridge"]
+
     def test_server_binary_path_accepts_rez_style_server_root(self, tmp_path, monkeypatch):
         """Pipeline package roots can provide the sidecar binary without pip install."""
         from dcc_mcp_3dsmax.max_bootstrap import _server_binary_path
@@ -454,12 +502,13 @@ class TestMenuIntegration:
     """Test generated 3ds Max menu/callback scripts."""
 
     def test_menu_script_contains_expected_commands(self):
-        """Menu script exposes sidecar lifecycle and admin commands."""
+        """Menu script exposes runtime lifecycle and admin commands."""
         from dcc_mcp_3dsmax.menu import _menu_script
 
         script = _menu_script()
         assert 'menuMan.findMenu "DCC MCP"' in script
         assert "DccMcp3dsmax_StartSidecar" in script
+        assert "dcc_mcp_3dsmax.main()" in script
         assert "DccMcp3dsmax_StopSidecar" in script
         assert "DccMcp3dsmax_OpenAdmin" in script
         assert "http://127.0.0.1:9765/admin?panel=instances" in script

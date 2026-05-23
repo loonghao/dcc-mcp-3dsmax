@@ -55,14 +55,14 @@ Open the MAXScript Listener and run:
 
   python.Execute "import dcc_mcp_3dsmax; print(dcc_mcp_3dsmax.__version__)"
 
-To start the sidecar bridge:
+To start the server:
 
-  DCC MCP > Start Sidecar
+  DCC MCP > Start Server
 
 Uninstall
 ---------
 Drag the MZP into 3ds Max and choose Uninstall. The uninstall action stops the
-running sidecar, removes the startup script, and deletes the install root. If
+running server, removes the startup script, and deletes the install root. If
 loaded native files are still locked, removal is retried during the next 3ds Max
 startup from a marker outside the install root.
 
