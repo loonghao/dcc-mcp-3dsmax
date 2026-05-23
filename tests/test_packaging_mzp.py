@@ -52,6 +52,7 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "button installBtn \"Install\"" in text
     assert "button uninstallBtn \"Uninstall\"" in text
     assert "dcc_mcp_3dsmax.stop_sidecar_bridge()" in text
+    assert "from dcc_mcp_core.install_lifecycle import safe_remove_tree" in text
     assert "sys.modules.pop(name, None)" in text
     assert "installed as an isolated version" in text
     assert "dcc-mcp-3dsmax install failed:" in text
@@ -78,22 +79,23 @@ def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
     assert "sys.path.insert(0, str(pkg))" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
+    assert "from dcc_mcp_core.install_lifecycle import safe_remove_tree" in text
 
 
 def test_extract_wheel_maps_data_scripts_next_to_packages(tmp_path):
     """Wheel .data/scripts entries must land where dcc_mcp_server can find them."""
     assembler = _load_assembler()
-    wheel = tmp_path / "dcc_mcp_server-0.17.19-py3-none-win_amd64.whl"
+    wheel = tmp_path / "dcc_mcp_server-0.17.23-py3-none-win_amd64.whl"
     dest = tmp_path / "python"
 
     with zipfile.ZipFile(wheel, "w") as zf:
-        zf.writestr("dcc_mcp_server/__init__.py", "__version__ = '0.17.19'\n")
-        zf.writestr("dcc_mcp_server-0.17.19.data/scripts/dcc-mcp-server.exe", b"binary")
-        zf.writestr("dcc_mcp_server-0.17.19.dist-info/METADATA", "Name: dcc-mcp-server\n")
+        zf.writestr("dcc_mcp_server/__init__.py", "__version__ = '0.17.23'\n")
+        zf.writestr("dcc_mcp_server-0.17.23.data/scripts/dcc-mcp-server.exe", b"binary")
+        zf.writestr("dcc_mcp_server-0.17.23.dist-info/METADATA", "Name: dcc-mcp-server\n")
 
     assembler.extract_wheel(wheel, dest)
 
     assert (dest / "dcc_mcp_server" / "__init__.py").is_file()
     assert (dest / "scripts" / "dcc-mcp-server.exe").read_bytes() == b"binary"
-    assert not (dest / "dcc_mcp_server-0.17.19.data").exists()
-    assert not (dest / "dcc_mcp_server-0.17.19.dist-info").exists()
+    assert not (dest / "dcc_mcp_server-0.17.23.data").exists()
+    assert not (dest / "dcc_mcp_server-0.17.23.dist-info").exists()

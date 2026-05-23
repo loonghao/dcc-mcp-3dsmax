@@ -4,6 +4,8 @@
 import os
 import subprocess
 import sys
+import time
+import types
 from pathlib import Path
 
 # Add src to path for testing
@@ -205,6 +207,81 @@ class TestExecution:
 
 class TestSidecar:
     """Test structured sidecar dispatch and bridge plumbing."""
+
+    def test_sidecar_server_logs_to_default_file(self, tmp_path, monkeypatch, capsys):
+        """Sidecar stdout/stderr are captured in a default operator-visible log."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        binary = tmp_path / ("dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server")
+        binary.write_text("stub", encoding="utf-8")
+        log_dir = tmp_path / "logs"
+        captured = {}
+
+        class FakeProcess:
+            pid = 4321
+
+            def wait(self, timeout):
+                raise subprocess.TimeoutExpired("sidecar", timeout)
+
+            def poll(self):
+                return None
+
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured.update(kwargs)
+            return FakeProcess()
+
+        monkeypatch.delenv("DCC_MCP_3DSMAX_SIDECAR_LOG", raising=False)
+        monkeypatch.setenv("DCC_MCP_3DSMAX_SIDECAR_LOG_DIR", str(log_dir))
+        monkeypatch.setattr(max_bootstrap, "_server_binary_path", lambda: binary)
+        monkeypatch.setattr(max_bootstrap, "qt_bridge_port", lambda: 9876)
+        monkeypatch.setattr(max_bootstrap.subprocess, "Popen", fake_popen)
+        max_bootstrap._sidecar_process = None
+        max_bootstrap._close_sidecar_log()
+
+        try:
+            process = max_bootstrap.start_sidecar_server()
+            log_path = Path(captured["stdout"].name)
+            assert process.pid == 4321
+            assert captured["stderr"] is captured["stdout"]
+            assert log_path.parent == log_dir
+            assert log_path.name.startswith("dcc-mcp-3dsmax-sidecar.")
+            assert log_path.name.endswith(".log")
+            assert "--display-name" in captured["cmd"]
+            output = capsys.readouterr().out
+            assert "dcc-mcp-3dsmax sidecar log:" in output
+            assert str(log_path) in output
+        finally:
+            max_bootstrap._sidecar_process = None
+            max_bootstrap._close_sidecar_log()
+
+    def test_sidecar_log_override_keeps_explicit_path(self, tmp_path):
+        """DCC_MCP_3DSMAX_SIDECAR_LOG keeps its exact path override semantics."""
+        from dcc_mcp_3dsmax.max_bootstrap import _open_sidecar_log
+
+        override = tmp_path / "custom" / "sidecar.log"
+        path, handle = _open_sidecar_log({"DCC_MCP_3DSMAX_SIDECAR_LOG": str(override)}, 1234)
+        try:
+            assert path == override
+            assert Path(handle.name) == override
+        finally:
+            handle.close()
+
+    def test_old_default_sidecar_logs_are_pruned(self, tmp_path):
+        """Startup cleanup prunes stale default sidecar logs."""
+        from dcc_mcp_3dsmax.max_bootstrap import _prune_sidecar_logs
+
+        old_log = tmp_path / "dcc-mcp-3dsmax-sidecar.old.log"
+        fresh_log = tmp_path / "dcc-mcp-3dsmax-sidecar.fresh.log"
+        old_log.write_text("old", encoding="utf-8")
+        fresh_log.write_text("fresh", encoding="utf-8")
+        stale = time.time() - (3 * 24 * 60 * 60)
+        os.utime(old_log, (stale, stale))
+
+        _prune_sidecar_logs(tmp_path, retention_days=1)
+
+        assert not old_log.exists()
+        assert fresh_log.exists()
 
     def test_server_binary_path_accepts_rez_style_server_root(self, tmp_path, monkeypatch):
         """Pipeline package roots can provide the sidecar binary without pip install."""
@@ -411,6 +488,66 @@ class TestSkillMetadata:
 
 class TestVersion:
     """Test version detection."""
+
+    def test_max_version_label_prefers_clean_product_year(self, monkeypatch):
+        """MXS array reprs with embedded quotes collapse to a clean Max year."""
+        from dcc_mcp_3dsmax.max_bootstrap import _max_version_label
+
+        class MxsArray:
+            values = [26000, 64, 0, 26, 2, 11, 20199, 2024, '".2.11 Security Fix"']
+
+            def __getitem__(self, index):
+                return self.values[index]
+
+            def __str__(self):
+                return '#(26000, 64, 0, 26, 2, 11, 20199, 2024, ".2.11 Security Fix")'
+
+        pymxs = types.SimpleNamespace(
+            runtime=types.SimpleNamespace(
+                maxVersion=lambda: MxsArray(),
+                productVersion="Autodesk 3ds Max 2024",
+            )
+        )
+        monkeypatch.setitem(sys.modules, "pymxs", pymxs)
+
+        assert _max_version_label() == "2024"
+
+    def test_max_version_label_sanitizes_repr_fallback(self, monkeypatch):
+        """Fallback labels never preserve shell-sensitive quotes or newlines."""
+        from dcc_mcp_3dsmax.max_bootstrap import _max_version_label
+
+        class BrokenMxsArray:
+            def __getitem__(self, index):
+                raise TypeError("not a Python sequence")
+
+            def __str__(self):
+                return '#(26000, "bad"\n\tlabel)'
+
+        pymxs = types.SimpleNamespace(
+            runtime=types.SimpleNamespace(
+                maxVersion=lambda: BrokenMxsArray(),
+            )
+        )
+        monkeypatch.setitem(sys.modules, "pymxs", pymxs)
+
+        label = _max_version_label()
+        assert '"' not in label
+        assert "'" not in label
+        assert "\n" not in label
+        assert "\t" not in label
+
+    def test_max_version_label_falls_back_to_unknown(self, monkeypatch):
+        """Version probe failures produce the stable unknown label."""
+        from dcc_mcp_3dsmax.max_bootstrap import _max_version_label
+
+        pymxs = types.SimpleNamespace(
+            runtime=types.SimpleNamespace(
+                maxVersion=lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+            )
+        )
+        monkeypatch.setitem(sys.modules, "pymxs", pymxs)
+
+        assert _max_version_label() == "unknown"
 
     def test_version_probe_import(self):
         """Test that version probe can be imported."""

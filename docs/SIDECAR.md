@@ -20,6 +20,7 @@ by `dcc-mcp-server.exe sidecar`, for example:
 dcc-mcp-3dsmax bridge listening on http://127.0.0.1:<random-port>/dispatch
 dcc-mcp-3dsmax qt bridge listening on qtserver://127.0.0.1:<random-port>
 dcc-mcp-3dsmax sidecar server started pid=<pid> (...\dcc-mcp-server.exe)
+dcc-mcp-3dsmax sidecar log: <platform-log-dir>\dcc-mcp-3dsmax-sidecar.<3ds-max-pid>.log
 ```
 
 Override the bridge port with `DCC_MCP_3DSMAX_BRIDGE_PORT` when a fixed bridge
@@ -35,6 +36,13 @@ After startup, `http://127.0.0.1:9765/admin?panel=instances` should list a
 The sidecar uses the default `dcc-mcp-server` registry. Set
 `DCC_MCP_REGISTRY_DIR` externally only when the whole local gateway stack needs
 to share a non-default registry directory.
+
+By default, the sidecar subprocess stdout/stderr stream is written to the
+platform log directory returned by `dcc-mcp-core`. Set
+`DCC_MCP_3DSMAX_SIDECAR_LOG` for an exact file override, or
+`DCC_MCP_3DSMAX_SIDECAR_LOG_DIR` to keep automatic file naming in a custom
+directory. Default logs are rotated by size and stale files are pruned at
+startup.
 
 ## Rez / Pipeline Bootstrap
 
