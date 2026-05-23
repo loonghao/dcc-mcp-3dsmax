@@ -28,6 +28,6 @@ except ModuleNotFoundError as exc:
     )
     raise
 
-from dcc_mcp_3dsmax.max_bootstrap import start_sidecar_bridge  # noqa: E402
+from dcc_mcp_3dsmax.max_bootstrap import main  # noqa: E402
 
-start_sidecar_bridge()
+main()

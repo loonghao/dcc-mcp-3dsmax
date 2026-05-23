@@ -7,6 +7,7 @@ import json
 import os
 import site
 import subprocess
+import sys
 import sysconfig
 import tempfile
 import time
@@ -126,6 +127,8 @@ def stop_sidecar_bridge(timeout: float = 5.0) -> None:
     """Stop the external sidecar process and both localhost bridges."""
     global _sidecar_process
 
+    _stop_embedded_server_if_loaded()
+
     process = _sidecar_process
     _sidecar_process = None
     if process is not None and process.poll() is None:
@@ -142,13 +145,22 @@ def stop_sidecar_bridge(timeout: float = 5.0) -> None:
     stop_bridge()
 
 
+def _stop_embedded_server_if_loaded() -> None:
+    server_module = sys.modules.get("dcc_mcp_3dsmax.server")
+    if server_module is None:
+        return
+    stop = getattr(server_module, "stop_server", None)
+    if callable(stop):
+        stop()
+
+
 def start_embedded_sidecar_bridge(
     bridge_port: Optional[int] = None,
     *,
     register_builtins: bool = True,
     include_bundled: bool = True,
 ) -> Any:
-    """Legacy embedded MCP server path retained for direct in-process tests."""
+    """Start the agent-callable embedded MCP runtime with main-thread execution."""
     from dcc_mcp_core import HostExecutionBridge  # noqa: PLC0415
 
     from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
@@ -419,12 +431,19 @@ def _sanitize_max_version_label(value: str) -> str:
 
 def main() -> Any:
     """Default entry point used by 3ds Max startup scripts."""
+    mode = os.environ.get("DCC_MCP_3DSMAX_BOOT_MODE", "runtime").strip().lower()
+    if mode == "sidecar":
+        return start_sidecar_bridge()
+
     _register_process_cleanup()
     _install_max_integration()
-    mode = os.environ.get("DCC_MCP_3DSMAX_BOOT_MODE", "sidecar").strip().lower()
-    if mode == "embedded":
+    if mode in {"server", "embedded-server"}:
         return start_embedded_server()
-    return start_sidecar_bridge()
+    if mode in {"runtime", "embedded", "embedded-sidecar", "bridge"}:
+        return start_embedded_sidecar_bridge()
+    raise ValueError(
+        "unsupported DCC_MCP_3DSMAX_BOOT_MODE={!r}; expected runtime, sidecar, or server".format(mode)
+    )
 
 
 if __name__ == "__main__":

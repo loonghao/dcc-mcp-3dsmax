@@ -76,20 +76,20 @@ the user's scripts directory.
 
 Startup installs a `DCC MCP` menu in the main menu bar with:
 
-- `Start Sidecar`
-- `Stop Sidecar`
+- `Start Server`
+- `Stop Server`
 - `Open Gateway Admin`
 - `Print Status`
 
-To install only the menu without starting the sidecar:
+To install only the menu without starting the runtime:
 
 ```maxscript
 python.Execute "import dcc_mcp_3dsmax; dcc_mcp_3dsmax.install_menu(); dcc_mcp_3dsmax.install_shutdown_callback()"
 ```
 
 The shutdown callback uses `#preSystemShutdown` and calls
-`dcc_mcp_3dsmax.stop_sidecar_bridge()`, which terminates the sidecar process and
-stops both localhost bridges.
+`dcc_mcp_3dsmax.stop_sidecar_bridge()`, which stops the embedded MCP server, any
+external sidecar process, and both localhost bridges.
 
 ## Dispatch Payload
 

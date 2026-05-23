@@ -72,7 +72,9 @@ from dcc_mcp_3dsmax.capabilities import (
 )
 
 _LAZY_EXPORTS = {
+    "main": ("dcc_mcp_3dsmax.max_bootstrap", "main"),
     "start_sidecar_bridge": ("dcc_mcp_3dsmax.max_bootstrap", "start_sidecar_bridge"),
+    "start_embedded_sidecar_bridge": ("dcc_mcp_3dsmax.max_bootstrap", "start_embedded_sidecar_bridge"),
     "stop_sidecar_bridge": ("dcc_mcp_3dsmax.max_bootstrap", "stop_sidecar_bridge"),
     "install_menu": ("dcc_mcp_3dsmax.menu", "install_menu"),
     "install_shutdown_callback": ("dcc_mcp_3dsmax.menu", "install_shutdown_callback"),
@@ -114,7 +116,9 @@ __all__ = [
     "DEFAULT_GATEWAY_PORT",
     "DEFAULT_PORT",
     "SERVER_NAME",
+    "main",
     "start_sidecar_bridge",
+    "start_embedded_sidecar_bridge",
     "stop_sidecar_bridge",
     "install_menu",
     "install_shutdown_callback",

@@ -41,15 +41,16 @@ Start the sidecar bootstrap inside 3ds Max:
 python.ExecuteFile @"C:\path\to\dcc-mcp-3dsmax\examples\start_sidecar_bridge.py"
 ```
 
-This starts the random-port `/dispatch` bridge for main-thread scene edits, a
-random-port `qtserver://` bridge for the sidecar process, and registers the
-3ds Max instance with the stable gateway at `http://127.0.0.1:9765/mcp`.
+This starts the agent-callable embedded MCP runtime, registers bundled 3ds Max
+skills/tools, and routes scene edits through a random-port `/dispatch` bridge
+for main-thread execution. The 3ds Max instance is registered with the stable
+gateway at `http://127.0.0.1:9765/mcp`.
 See `docs/SIDECAR.md`.
 
-The bootstrap also installs a `DCC MCP` menu with Start Sidecar, Stop Sidecar,
+The bootstrap also installs a `DCC MCP` menu with Start Server, Stop Server,
 Open Gateway Admin, and Print Status commands. 3ds Max shutdown triggers the
-same stop path via `#preSystemShutdown`, so the sidecar process and local
-bridges are cleaned up when the host exits.
+same stop path via `#preSystemShutdown`, so the runtime and local bridges are
+cleaned up when the host exits.
 
 ## Skill Development
 
