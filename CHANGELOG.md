@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.4...v0.1.5) (2026-05-23)
+
+
+### Bug Fixes
+
+* surface 3dsmax sidecar diagnostics ([38e319b](https://github.com/loonghao/dcc-mcp-3dsmax/commit/38e319b2716e65c030e410fdbac9c31d39446df5))
+
 ## [0.1.4](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.3...v0.1.4) (2026-05-22)
 
 
