@@ -10,8 +10,8 @@ Installation
 1. Start 3ds Max.
 2. Drag dcc-mcp-3dsmax-<version>-win64.mzp into the 3ds Max viewport.
 3. The installer writes the startup script, activates the new version, removes
-   obsolete payload directories where possible, and starts the sidecar bridge.
-4. Future 3ds Max launches start the sidecar bridge automatically. Use the
+   obsolete payload directories where possible, and starts the runtime.
+4. Future 3ds Max launches start the runtime automatically. Use the
    DCC MCP menu only when you need to stop or manually restart it.
 
 The installer copies each payload into an isolated version directory:
@@ -22,7 +22,10 @@ The active version is recorded in:
 
 It also writes a startup MaxScript that adds the installed Python package
 directory to sys.path on launch, installs the DCC MCP menu, cleans obsolete
-payload directories, and starts the sidecar bridge from the active payload.
+payload directories, and starts the runtime from the active payload.
+
+Normal MZP installs do not need DCC_MCP_3DSMAX_PORT or DCC_MCP_GATEWAY_PORT;
+the runtime uses default ports.
 
 Uninstall cleanup uses dcc-mcp-core's import-light install lifecycle helpers
 when they are available. If a loaded native extension keeps files locked, the
@@ -37,8 +40,8 @@ environment instead of copied MZP payloads. Set one or more of:
   DCC_MCP_PYTHONPATHS             Shared semicolon-separated Python import roots.
   DCC_MCP_3DSMAX_ROOT             Adapter package root.
   DCC_MCP_CORE_ROOT               dcc-mcp-core package root.
-  DCC_MCP_SERVER_ROOT             dcc-mcp-server package root.
-  DCC_MCP_SERVER_BIN              Explicit dcc-mcp-server executable.
+  DCC_MCP_SERVER_ROOT             Fallback dcc-mcp-server package root.
+  DCC_MCP_SERVER_BIN              Explicit dcc-mcp-server executable for sidecar mode.
 
 For example, a Rez package can point these roots at package-cache paths such as:
 

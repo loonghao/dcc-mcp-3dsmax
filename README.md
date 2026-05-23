@@ -33,9 +33,9 @@ server.load_skill("3dsmax-scene")  # lazy-load a specific skill
 dcc_mcp_3dsmax.stop_server()
 ```
 
-## Sidecar Bridge
+## Runtime Bridge
 
-Start the sidecar bootstrap inside 3ds Max:
+Start the runtime bootstrap inside 3ds Max:
 
 ```maxscript
 python.ExecuteFile @"C:\path\to\dcc-mcp-3dsmax\examples\start_sidecar_bridge.py"
@@ -79,19 +79,18 @@ def main(width: float = 100.0, height: float = 100.0, depth: float = 100.0) -> d
 | `DCC_MCP_3DSMAX_DISABLE_ARBITRARY_SCRIPT` | Disable all arbitrary script execution | `0` |
 | `DCC_MCP_3DSMAX_ENABLE_GATEWAY_FAILOVER` | Enable gateway failover | `1` |
 | `DCC_MCP_3DSMAX_SKILL_PATHS` | Extra skill search paths (semicolon-separated) | None |
-| `DCC_MCP_3DSMAX_BRIDGE_PORT` | Sidecar bridge localhost port | random |
-| `DCC_MCP_3DSMAX_SIDECAR_LOG` | Explicit stdout/stderr log file for the sidecar subprocess | platform log dir |
-| `DCC_MCP_3DSMAX_SIDECAR_LOG_DIR` | Directory for default sidecar stdout/stderr logs | core log dir |
-| `DCC_MCP_3DSMAX_SIDECAR_LOG_RETENTION_DAYS` | Days to keep default sidecar logs | `14` |
-| `DCC_MCP_3DSMAX_SIDECAR_LOG_MAX_BYTES` | Rotate a default sidecar log after this size | `10485760` |
-| `DCC_MCP_3DSMAX_SIDECAR_LOG_MAX_FILES` | Rotated default sidecar log files to keep | `5` |
+| `DCC_MCP_3DSMAX_BRIDGE_PORT` | Runtime bridge localhost port | random |
 | `DCC_MCP_3DSMAX_BOOTSTRAP_PATHS` | Extra package Python roots for startup bootstrapping | None |
 | `DCC_MCP_PYTHONPATHS` | Shared package Python roots for Rez/pipeline launchers | None |
 | `DCC_MCP_3DSMAX_ROOT` | Adapter package root; startup probes `python`, `python37`, `src`, and root | None |
 | `DCC_MCP_CORE_ROOT` | `dcc-mcp-core` package root; startup probes `python`, `python37`, `src`, and root | None |
-| `DCC_MCP_SERVER_ROOT` | `dcc-mcp-server` package root; startup probes Python roots and sidecar binary locations | None |
-| `DCC_MCP_SERVER_BIN` | Explicit `dcc-mcp-server` executable path | auto-detect |
+| `DCC_MCP_SERVER_ROOT` | Fallback `dcc-mcp-server` package root for Rez/pipeline launches | None |
+| `DCC_MCP_SERVER_BIN` | Explicit `dcc-mcp-server` executable path for sidecar mode | bundled payload |
 | `DCC_MCP_REGISTRY_DIR` | Optional shared gateway/sidecar registry override | core default |
+
+Normal MZP installs do not need `DCC_MCP_3DSMAX_PORT` or
+`DCC_MCP_GATEWAY_PORT`: the adapter uses an internal ephemeral MCP port and the
+shared gateway default.
 
 For Rez-style deployment, launch 3ds Max with package roots in the environment
 instead of copying packages into the user scripts folder. A pipeline package
@@ -102,9 +101,9 @@ The MZP installer uses isolated version directories under
 `<user scripts>/dcc_mcp_3dsmax/versions/`, so installing a new payload does not
 delete the version that may already be loaded by the running 3ds Max process.
 After install, the active payload is added to `sys.path`, obsolete payload
-directories are cleaned up where possible, and the sidecar bridge is started.
-The generated startup script repeats that activation on future 3ds Max launches,
-so the bridge comes back automatically after restart.
+directories are cleaned up where possible, and the runtime is started. The
+generated startup script repeats that activation on future 3ds Max launches, so
+the bridge comes back automatically after restart.
 Uninstall cleanup uses the import-light lifecycle helpers from `dcc-mcp-core`
 when available, so locked native files are reported as restart-required instead
 of disappearing into a generic `PermissionError`.
