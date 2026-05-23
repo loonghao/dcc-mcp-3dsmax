@@ -9,8 +9,6 @@ import site
 import subprocess
 import sys
 import sysconfig
-import tempfile
-import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,19 +18,7 @@ from dcc_mcp_3dsmax.sidecar.bridge import execute_on_main_thread, start_bridge, 
 from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, stop_qt_bridge
 
 _sidecar_process: Optional[subprocess.Popen] = None
-_sidecar_log_handle: Optional[Any] = None
-_sidecar_log_path: Optional[Path] = None
 _cleanup_registered = False
-
-_SIDECAR_LOG_PREFIX = "dcc-mcp-3dsmax-sidecar"
-_ENV_SIDECAR_LOG = "DCC_MCP_3DSMAX_SIDECAR_LOG"
-_ENV_SIDECAR_LOG_DIR = "DCC_MCP_3DSMAX_SIDECAR_LOG_DIR"
-_ENV_SIDECAR_LOG_MAX_BYTES = "DCC_MCP_3DSMAX_SIDECAR_LOG_MAX_BYTES"
-_ENV_SIDECAR_LOG_MAX_FILES = "DCC_MCP_3DSMAX_SIDECAR_LOG_MAX_FILES"
-_ENV_SIDECAR_LOG_RETENTION_DAYS = "DCC_MCP_3DSMAX_SIDECAR_LOG_RETENTION_DAYS"
-_DEFAULT_SIDECAR_LOG_MAX_BYTES = 10 * 1024 * 1024
-_DEFAULT_SIDECAR_LOG_MAX_FILES = 5
-_DEFAULT_SIDECAR_LOG_RETENTION_DAYS = 14
 
 
 def start_embedded_server(port: Optional[int] = None, **kwargs: Any) -> Any:
@@ -61,7 +47,7 @@ def start_sidecar_bridge(
 
 def start_sidecar_server() -> subprocess.Popen:
     """Start ``dcc-mcp-server.exe sidecar`` for gateway/admin registration."""
-    global _sidecar_log_handle, _sidecar_log_path, _sidecar_process
+    global _sidecar_process
 
     if _sidecar_process is not None and _sidecar_process.poll() is None:
         return _sidecar_process
@@ -87,19 +73,17 @@ def start_sidecar_server() -> subprocess.Popen:
     ]
     env = dict(os.environ)
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    _close_sidecar_log()
-    _sidecar_log_path, _sidecar_log_handle = _open_sidecar_log(env, pid)
     try:
         _sidecar_process = subprocess.Popen(  # noqa: S603 - binary path is resolved locally or explicitly configured.
             cmd,
             env=env,
             stdin=subprocess.DEVNULL,
-            stdout=_sidecar_log_handle,
-            stderr=_sidecar_log_handle,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
             creationflags=creationflags,
         )
     except Exception:
-        _close_sidecar_log()
         raise
     try:
         exit_code = _sidecar_process.wait(timeout=0.75)
@@ -107,18 +91,13 @@ def start_sidecar_server() -> subprocess.Popen:
         exit_code = None
     if exit_code is not None:
         _sidecar_process = None
-        _close_sidecar_log()
-        detail = "\n{}".format(_read_tail(_sidecar_log_path)) if _sidecar_log_path else ""
-        raise RuntimeError(
-            "dcc-mcp-server sidecar exited during startup with code {}.{}".format(exit_code, detail)
-        )
+        raise RuntimeError("dcc-mcp-server sidecar exited during startup with code {}.".format(exit_code))
     print(
         "dcc-mcp-3dsmax sidecar server started pid={} ({})".format(
             _sidecar_process.pid,
             binary,
         )
     )
-    print("dcc-mcp-3dsmax sidecar log: {}".format(_sidecar_log_path))
     print("dcc-mcp-3dsmax MCP gateway available at http://127.0.0.1:{}/mcp".format(DEFAULT_GATEWAY_PORT))
     return _sidecar_process
 
@@ -139,7 +118,6 @@ def stop_sidecar_bridge(timeout: float = 5.0) -> None:
             process.kill()
             process.wait(timeout=timeout)
         print("dcc-mcp-3dsmax sidecar server stopped pid={}".format(process.pid))
-    _close_sidecar_log()
 
     stop_qt_bridge()
     stop_bridge()
@@ -197,6 +175,7 @@ def _server_binary_path() -> Path:
 
     binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
     candidates = []
+    candidates.extend(_bundled_server_binary_candidates(binary_name))
     server_root = os.environ.get("DCC_MCP_SERVER_ROOT")
     if server_root:
         root = Path(server_root).expanduser()
@@ -208,18 +187,6 @@ def _server_binary_path() -> Path:
                 root / "Scripts" / binary_name,
             ]
         )
-    candidates.extend(_bundled_server_binary_candidates(binary_name))
-    candidates.extend(
-        [
-            Path(sysconfig.get_path("scripts") or "") / binary_name,
-            Path(site.USER_BASE) / ("Scripts" if os.name == "nt" else "bin") / binary_name,
-        ]
-    )
-    try:
-        user_site = Path(site.getusersitepackages())
-        candidates.append(user_site.parent / ("Scripts" if os.name == "nt" else "bin") / binary_name)
-    except Exception:  # noqa: BLE001
-        pass
 
     for candidate in candidates:
         if candidate.is_file():
@@ -228,12 +195,29 @@ def _server_binary_path() -> Path:
     try:
         from dcc_mcp_server import binary_path  # noqa: PLC0415
 
-        return Path(binary_path())
-    except Exception as exc:  # noqa: BLE001
-        raise FileNotFoundError(
-            "dcc-mcp-server binary not found. Run `just max-install-core-win` "
-            "or set DCC_MCP_SERVER_BIN / DCC_MCP_SERVER_ROOT."
-        ) from exc
+        candidate = Path(binary_path())
+        if candidate.is_file():
+            return candidate
+    except Exception:  # noqa: BLE001
+        pass
+
+    fallback_candidates = [
+        Path(sysconfig.get_path("scripts") or "") / binary_name,
+        Path(site.USER_BASE) / ("Scripts" if os.name == "nt" else "bin") / binary_name,
+    ]
+    try:
+        user_site = Path(site.getusersitepackages())
+        fallback_candidates.append(user_site.parent / ("Scripts" if os.name == "nt" else "bin") / binary_name)
+    except Exception:  # noqa: BLE001
+        pass
+    for candidate in fallback_candidates:
+        if candidate.is_file():
+            return candidate
+
+    raise FileNotFoundError(
+        "dcc-mcp-server binary not found. Set DCC_MCP_SERVER_BIN to an explicit executable "
+        "or install a payload that includes dcc-mcp-server."
+    )
 
 
 def _bundled_server_binary_candidates(binary_name: str) -> list[Path]:
@@ -247,105 +231,6 @@ def _bundled_server_binary_candidates(binary_name: str) -> list[Path]:
         package_root / "bin" / binary_name,
         package_root / binary_name,
     ]
-
-
-def _close_sidecar_log() -> None:
-    global _sidecar_log_handle
-    if _sidecar_log_handle is None:
-        return
-    _sidecar_log_handle.close()
-    _sidecar_log_handle = None
-
-
-def _open_sidecar_log(env: dict[str, str], owner_pid: int) -> tuple[Path, Any]:
-    explicit = env.get(_ENV_SIDECAR_LOG)
-    if explicit:
-        path = Path(explicit).expanduser()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path, path.open("a", encoding="utf-8", buffering=1)
-
-    log_dir = _resolve_sidecar_log_dir(env)
-    retention_days = _env_int(env, _ENV_SIDECAR_LOG_RETENTION_DAYS, _DEFAULT_SIDECAR_LOG_RETENTION_DAYS)
-    max_bytes = _env_int(env, _ENV_SIDECAR_LOG_MAX_BYTES, _DEFAULT_SIDECAR_LOG_MAX_BYTES)
-    max_files = _env_int(env, _ENV_SIDECAR_LOG_MAX_FILES, _DEFAULT_SIDECAR_LOG_MAX_FILES)
-    _prune_sidecar_logs(log_dir, retention_days)
-    path = log_dir / "{}.{}.log".format(_SIDECAR_LOG_PREFIX, owner_pid)
-    _rotate_sidecar_log(path, max_bytes=max_bytes, max_files=max_files)
-    return path, path.open("a", encoding="utf-8", buffering=1)
-
-
-def _resolve_sidecar_log_dir(env: dict[str, str]) -> Path:
-    override = env.get(_ENV_SIDECAR_LOG_DIR)
-    if override:
-        path = Path(override).expanduser()
-    else:
-        try:
-            from dcc_mcp_core import get_log_dir  # noqa: PLC0415
-
-            path = Path(get_log_dir())
-        except Exception:  # noqa: BLE001
-            path = Path(tempfile.gettempdir()) / "dcc-mcp" / "logs"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _prune_sidecar_logs(log_dir: Path, retention_days: int) -> None:
-    if retention_days <= 0:
-        return
-    cutoff = time.time() - (retention_days * 24 * 60 * 60)
-    for path in log_dir.glob("{}.*.log*".format(_SIDECAR_LOG_PREFIX)):
-        try:
-            if path.stat().st_mtime < cutoff:
-                path.unlink()
-        except OSError:
-            pass
-
-
-def _rotate_sidecar_log(path: Path, *, max_bytes: int, max_files: int) -> None:
-    if max_bytes <= 0 or max_files <= 0 or not path.exists():
-        return
-    try:
-        if path.stat().st_size <= max_bytes:
-            return
-    except OSError:
-        return
-
-    oldest = path.with_name("{}.{}".format(path.name, max_files))
-    if oldest.exists():
-        try:
-            oldest.unlink()
-        except OSError:
-            pass
-
-    for index in range(max_files - 1, 0, -1):
-        src = path.with_name("{}.{}".format(path.name, index))
-        dst = path.with_name("{}.{}".format(path.name, index + 1))
-        if src.exists():
-            try:
-                src.replace(dst)
-            except OSError:
-                pass
-    try:
-        path.replace(path.with_name("{}.1".format(path.name)))
-    except OSError:
-        pass
-
-
-def _env_int(env: dict[str, str], name: str, default: int) -> int:
-    try:
-        return int(env.get(name, "").strip() or default)
-    except (TypeError, ValueError):
-        return default
-
-
-def _read_tail(path: Path, max_chars: int = 4000) -> str:
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return "sidecar log could not be read: {}".format(path)
-    if len(text) <= max_chars:
-        return text
-    return text[-max_chars:]
 
 
 def _register_process_cleanup() -> None:

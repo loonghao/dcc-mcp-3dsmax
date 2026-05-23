@@ -222,17 +222,17 @@ if pump:
     pump.install()  # Start the idle-event pump
 ```
 
-## Sidecar Bridge
+## Runtime Bridge
 
-For external MCP processes, start the structured bridge inside 3ds Max:
+Start the agent-callable runtime bridge inside 3ds Max:
 
 ```python
-from dcc_mcp_3dsmax.max_bootstrap import start_sidecar_bridge
+from dcc_mcp_3dsmax.max_bootstrap import main
 
-start_sidecar_bridge()
+main()
 ```
 
-This starts a random-port main-thread HTTP bridge, a random-port JSON-line
-`qtserver://` bridge for `dcc-mcp-server.exe sidecar`, and registers the
-3ds Max instance with the stable gateway at `http://127.0.0.1:9765/mcp`.
+This starts the embedded adapter runtime, registers bundled 3ds Max tools, and
+routes scene edits through a random-port main-thread HTTP bridge. Normal MZP
+installs do not need `DCC_MCP_3DSMAX_PORT` or `DCC_MCP_GATEWAY_PORT`.
 See `docs/SIDECAR.md` for the full protocol.

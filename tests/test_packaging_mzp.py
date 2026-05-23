@@ -95,6 +95,8 @@ def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
     assert "dcc_mcp_3dsmax.main()" in text
+    assert "DCC_MCP_3DSMAX_PORT" not in text
+    assert "DCC_MCP_GATEWAY_PORT" not in text
     assert "def _cleanup_obsolete_payloads(active_root):" in text
     assert "_cleanup_obsolete_payloads(install_payload)" in text
     assert "from dcc_mcp_core.install_lifecycle import safe_remove_tree" in text

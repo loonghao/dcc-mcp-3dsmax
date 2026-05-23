@@ -1,8 +1,8 @@
-# 3ds Max Sidecar Bridge
+# 3ds Max Runtime Bridge
 
-The sidecar bootstrap runs inside Autodesk 3ds Max. It exposes local bridges
-for main-thread scene edits, starts `dcc-mcp-server.exe sidecar`, and registers
-a 3ds Max instance with the shared gateway.
+The runtime bootstrap runs inside Autodesk 3ds Max. By default it starts the
+embedded adapter runtime, registers bundled 3ds Max tools with the shared
+gateway, and exposes a local bridge for main-thread scene edits.
 
 ## Start Inside 3ds Max
 
@@ -12,19 +12,17 @@ Run:
 python.ExecuteFile @"C:\path\to\dcc-mcp-3dsmax\examples\start_sidecar_bridge.py"
 ```
 
-By default both internal bridges ask the OS for free localhost ports. Startup
-prints the HTTP dispatch endpoint and the JSON-line `qtserver://` endpoint used
-by `dcc-mcp-server.exe sidecar`, for example:
+By default the internal bridge asks the OS for a free localhost port. Startup
+prints the HTTP dispatch endpoint, for example:
 
 ```text
 dcc-mcp-3dsmax bridge listening on http://127.0.0.1:<random-port>/dispatch
-dcc-mcp-3dsmax qt bridge listening on qtserver://127.0.0.1:<random-port>
-dcc-mcp-3dsmax sidecar server started pid=<pid> (...\dcc-mcp-server.exe)
-dcc-mcp-3dsmax sidecar log: <platform-log-dir>\dcc-mcp-3dsmax-sidecar.<3ds-max-pid>.log
 ```
 
 Override the bridge port with `DCC_MCP_3DSMAX_BRIDGE_PORT` when a fixed bridge
-port is needed. The public MCP gateway is stable at:
+port is needed. Normal MZP installs do not need `DCC_MCP_3DSMAX_PORT` or
+`DCC_MCP_GATEWAY_PORT`: the adapter uses an internal ephemeral MCP port and the
+public MCP gateway is stable at:
 
 ```text
 http://127.0.0.1:9765/mcp
@@ -33,16 +31,18 @@ http://127.0.0.1:9765/mcp
 After startup, `http://127.0.0.1:9765/admin?panel=instances` should list a
 `3dsmax` instance on a random localhost port.
 
-The sidecar uses the default `dcc-mcp-server` registry. Set
+The runtime uses the default `dcc-mcp-server` registry. Set
 `DCC_MCP_REGISTRY_DIR` externally only when the whole local gateway stack needs
 to share a non-default registry directory.
 
-By default, the sidecar subprocess stdout/stderr stream is written to the
-platform log directory returned by `dcc-mcp-core`. Set
-`DCC_MCP_3DSMAX_SIDECAR_LOG` for an exact file override, or
-`DCC_MCP_3DSMAX_SIDECAR_LOG_DIR` to keep automatic file naming in a custom
-directory. Default logs are rotated by size and stale files are pruned at
-startup.
+Logs follow the shared `dcc-mcp-core` / gateway defaults, matching the Maya
+adapter. The 3ds Max bootstrap does not require adapter-specific log
+environment variables.
+
+The process-isolated sidecar path is still available for diagnostics with
+`DCC_MCP_3DSMAX_BOOT_MODE=sidecar`. In that mode `DCC_MCP_SERVER_BIN` is the
+only executable override above the current bundled payload; stale or missing
+overrides fall back to the versioned install.
 
 ## Rez / Pipeline Bootstrap
 
@@ -57,8 +57,8 @@ Supported variables:
 - `DCC_MCP_PYTHONPATHS`: shared semicolon-separated Python import roots.
 - `DCC_MCP_3DSMAX_ROOT`: adapter package root.
 - `DCC_MCP_CORE_ROOT`: `dcc-mcp-core` package root.
-- `DCC_MCP_SERVER_ROOT`: `dcc-mcp-server` package root.
-- `DCC_MCP_SERVER_BIN`: explicit `dcc-mcp-server` executable path.
+- `DCC_MCP_SERVER_ROOT`: fallback `dcc-mcp-server` package root.
+- `DCC_MCP_SERVER_BIN`: explicit `dcc-mcp-server` executable path for sidecar mode.
 
 For each root variable, startup probes `python37/` when running older 3ds Max
 Python, then `python/`, `src/`, and the root itself. A package cache such as:

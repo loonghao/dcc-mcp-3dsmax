@@ -4,7 +4,6 @@
 import os
 import subprocess
 import sys
-import time
 import types
 from pathlib import Path
 
@@ -208,13 +207,12 @@ class TestExecution:
 class TestSidecar:
     """Test structured sidecar dispatch and bridge plumbing."""
 
-    def test_sidecar_server_logs_to_default_file(self, tmp_path, monkeypatch, capsys):
-        """Sidecar stdout/stderr are captured in a default operator-visible log."""
+    def test_sidecar_server_uses_default_process_streams(self, tmp_path, monkeypatch, capsys):
+        """External sidecar mode leaves logging to dcc-mcp-server, like Maya."""
         from dcc_mcp_3dsmax import max_bootstrap
 
         binary = tmp_path / ("dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server")
         binary.write_text("stub", encoding="utf-8")
-        log_dir = tmp_path / "logs"
         captured = {}
 
         class FakeProcess:
@@ -231,57 +229,21 @@ class TestSidecar:
             captured.update(kwargs)
             return FakeProcess()
 
-        monkeypatch.delenv("DCC_MCP_3DSMAX_SIDECAR_LOG", raising=False)
-        monkeypatch.setenv("DCC_MCP_3DSMAX_SIDECAR_LOG_DIR", str(log_dir))
         monkeypatch.setattr(max_bootstrap, "_server_binary_path", lambda: binary)
         monkeypatch.setattr(max_bootstrap, "qt_bridge_port", lambda: 9876)
         monkeypatch.setattr(max_bootstrap.subprocess, "Popen", fake_popen)
         max_bootstrap._sidecar_process = None
-        max_bootstrap._close_sidecar_log()
 
-        try:
-            process = max_bootstrap.start_sidecar_server()
-            log_path = Path(captured["stdout"].name)
-            assert process.pid == 4321
-            assert captured["stderr"] is captured["stdout"]
-            assert log_path.parent == log_dir
-            assert log_path.name.startswith("dcc-mcp-3dsmax-sidecar.")
-            assert log_path.name.endswith(".log")
-            assert "--display-name" in captured["cmd"]
-            output = capsys.readouterr().out
-            assert "dcc-mcp-3dsmax sidecar log:" in output
-            assert str(log_path) in output
-        finally:
-            max_bootstrap._sidecar_process = None
-            max_bootstrap._close_sidecar_log()
-
-    def test_sidecar_log_override_keeps_explicit_path(self, tmp_path):
-        """DCC_MCP_3DSMAX_SIDECAR_LOG keeps its exact path override semantics."""
-        from dcc_mcp_3dsmax.max_bootstrap import _open_sidecar_log
-
-        override = tmp_path / "custom" / "sidecar.log"
-        path, handle = _open_sidecar_log({"DCC_MCP_3DSMAX_SIDECAR_LOG": str(override)}, 1234)
-        try:
-            assert path == override
-            assert Path(handle.name) == override
-        finally:
-            handle.close()
-
-    def test_old_default_sidecar_logs_are_pruned(self, tmp_path):
-        """Startup cleanup prunes stale default sidecar logs."""
-        from dcc_mcp_3dsmax.max_bootstrap import _prune_sidecar_logs
-
-        old_log = tmp_path / "dcc-mcp-3dsmax-sidecar.old.log"
-        fresh_log = tmp_path / "dcc-mcp-3dsmax-sidecar.fresh.log"
-        old_log.write_text("old", encoding="utf-8")
-        fresh_log.write_text("fresh", encoding="utf-8")
-        stale = time.time() - (3 * 24 * 60 * 60)
-        os.utime(old_log, (stale, stale))
-
-        _prune_sidecar_logs(tmp_path, retention_days=1)
-
-        assert not old_log.exists()
-        assert fresh_log.exists()
+        process = max_bootstrap.start_sidecar_server()
+        assert process.pid == 4321
+        assert captured["stdout"] is subprocess.DEVNULL
+        assert captured["stderr"] is subprocess.DEVNULL
+        assert captured["stdin"] is subprocess.DEVNULL
+        assert captured["close_fds"] is True
+        assert "--display-name" in captured["cmd"]
+        output = capsys.readouterr().out
+        assert "dcc-mcp-3dsmax sidecar server started" in output
+        assert "sidecar log:" not in output
 
     def test_main_defaults_to_agent_callable_embedded_runtime(self, monkeypatch):
         """Startup scripts should register adapter tools, not just a host RPC sidecar."""
@@ -324,12 +286,11 @@ class TestSidecar:
         monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server)
         monkeypatch.setattr(max_bootstrap, "stop_qt_bridge", lambda: calls.append("stop_qt_bridge"))
         monkeypatch.setattr(max_bootstrap, "stop_bridge", lambda: calls.append("stop_bridge"))
-        monkeypatch.setattr(max_bootstrap, "_close_sidecar_log", lambda: calls.append("close_log"))
         max_bootstrap._sidecar_process = None
 
         max_bootstrap.stop_sidecar_bridge()
 
-        assert calls == ["stop_server", "close_log", "stop_qt_bridge", "stop_bridge"]
+        assert calls == ["stop_server", "stop_qt_bridge", "stop_bridge"]
 
     def test_server_binary_path_accepts_rez_style_server_root(self, tmp_path, monkeypatch):
         """Pipeline package roots can provide the sidecar binary without pip install."""
@@ -343,6 +304,65 @@ class TestSidecar:
         monkeypatch.setenv("DCC_MCP_SERVER_ROOT", str(tmp_path))
 
         assert _server_binary_path() == binary
+
+    def test_server_binary_path_prefers_env_bin_when_it_exists(self, tmp_path, monkeypatch):
+        """DCC_MCP_SERVER_BIN is the only override above the versioned payload."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
+        package_root = tmp_path / "installed" / "python"
+        package_dir = package_root / "dcc_mcp_3dsmax"
+        bundled_binary = package_root / "scripts" / binary_name
+        override_binary = tmp_path / "override" / binary_name
+        package_dir.mkdir(parents=True)
+        bundled_binary.parent.mkdir(parents=True)
+        override_binary.parent.mkdir(parents=True)
+        bundled_binary.write_text("bundled", encoding="utf-8")
+        override_binary.write_text("override", encoding="utf-8")
+
+        monkeypatch.setenv("DCC_MCP_SERVER_BIN", str(override_binary))
+        monkeypatch.setattr(max_bootstrap, "__file__", str(package_dir / "max_bootstrap.py"))
+
+        assert max_bootstrap._server_binary_path() == override_binary
+
+    def test_server_binary_path_falls_back_to_bundled_when_env_bin_is_missing(self, tmp_path, monkeypatch):
+        """A stale DCC_MCP_SERVER_BIN should not block the versioned fallback."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
+        package_root = tmp_path / "installed" / "python"
+        package_dir = package_root / "dcc_mcp_3dsmax"
+        bundled_binary = package_root / "scripts" / binary_name
+        package_dir.mkdir(parents=True)
+        bundled_binary.parent.mkdir(parents=True)
+        bundled_binary.write_text("bundled", encoding="utf-8")
+
+        monkeypatch.setenv("DCC_MCP_SERVER_BIN", str(tmp_path / "missing" / binary_name))
+        monkeypatch.delenv("DCC_MCP_SERVER_ROOT", raising=False)
+        monkeypatch.setattr(max_bootstrap, "__file__", str(package_dir / "max_bootstrap.py"))
+
+        assert max_bootstrap._server_binary_path() == bundled_binary
+
+    def test_server_binary_path_prefers_bundled_payload_over_server_root(self, tmp_path, monkeypatch):
+        """Stale DCC_MCP_SERVER_ROOT must not outrank the current MZP payload."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
+        package_root = tmp_path / "installed" / "python"
+        package_dir = package_root / "dcc_mcp_3dsmax"
+        bundled_binary = package_root / "scripts" / binary_name
+        stale_root_binary = tmp_path / "stale-root" / "scripts" / binary_name
+        package_dir.mkdir(parents=True)
+        bundled_binary.parent.mkdir(parents=True)
+        stale_root_binary.parent.mkdir(parents=True)
+        bundled_binary.write_text("bundled", encoding="utf-8")
+        stale_root_binary.write_text("stale", encoding="utf-8")
+
+        monkeypatch.delenv("DCC_MCP_SERVER_BIN", raising=False)
+        monkeypatch.setenv("DCC_MCP_SERVER_ROOT", str(stale_root_binary.parent.parent))
+        monkeypatch.setattr(max_bootstrap, "__file__", str(package_dir / "max_bootstrap.py"))
+
+        assert max_bootstrap._server_binary_path() == bundled_binary
 
     def test_server_binary_path_prefers_bundled_payload_over_user_scripts(self, tmp_path, monkeypatch):
         """MZP installs must use the bundled sidecar binary before stale user installs."""
