@@ -21,6 +21,10 @@ The active version is recorded in:
 It also writes a startup MaxScript that adds the installed Python package
 directory to sys.path on launch and installs the DCC MCP menu.
 
+Uninstall cleanup uses dcc-mcp-core's import-light install lifecycle helpers
+when they are available. If a loaded native extension keeps files locked, the
+installer leaves a deferred cleanup marker and finishes removal after restart.
+
 Rez / pipeline deployments
 --------------------------
 The startup script can also use package roots supplied by the launch
