@@ -296,6 +296,38 @@ class TestSidecar:
 
         assert _server_binary_path() == binary
 
+    def test_server_binary_path_prefers_bundled_payload_over_user_scripts(self, tmp_path, monkeypatch):
+        """MZP installs must use the bundled sidecar binary before stale user installs."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        binary_name = "dcc-mcp-server.exe" if os.name == "nt" else "dcc-mcp-server"
+        scripts_dir = "Scripts" if os.name == "nt" else "bin"
+        package_root = tmp_path / "installed" / "python"
+        package_dir = package_root / "dcc_mcp_3dsmax"
+        bundled_binary = package_root / "scripts" / binary_name
+        stale_binary = tmp_path / "user-base" / scripts_dir / binary_name
+        sysconfig_binary = tmp_path / "sysconfig" / scripts_dir / binary_name
+        package_dir.mkdir(parents=True)
+        bundled_binary.parent.mkdir(parents=True)
+        bundled_binary.write_text("bundled", encoding="utf-8")
+        stale_binary.parent.mkdir(parents=True)
+        stale_binary.write_text("stale", encoding="utf-8")
+        sysconfig_binary.parent.mkdir(parents=True)
+        sysconfig_binary.write_text("sysconfig", encoding="utf-8")
+
+        monkeypatch.delenv("DCC_MCP_SERVER_BIN", raising=False)
+        monkeypatch.delenv("DCC_MCP_SERVER_ROOT", raising=False)
+        monkeypatch.setattr(max_bootstrap, "__file__", str(package_dir / "max_bootstrap.py"))
+        monkeypatch.setattr(max_bootstrap.sysconfig, "get_path", lambda name: str(sysconfig_binary.parent))
+        monkeypatch.setattr(max_bootstrap.site, "USER_BASE", str(stale_binary.parent.parent), raising=False)
+        monkeypatch.setattr(
+            max_bootstrap.site,
+            "getusersitepackages",
+            lambda: str(stale_binary.parent.parent / "Python310" / "site-packages"),
+        )
+
+        assert max_bootstrap._server_binary_path() == bundled_binary
+
     def test_sidecar_dispatch_accepts_script_path_payload(self, tmp_path):
         """Sidecar payloads execute explicit script paths."""
         import json

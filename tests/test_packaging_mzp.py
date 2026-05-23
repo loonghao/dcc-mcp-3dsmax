@@ -49,17 +49,22 @@ def test_install_script_normalizes_paths_before_embedding_in_python(tmp_path):
     assert "version_name = '1.2.3'" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
+    assert "dcc_mcp_3dsmax.start_sidecar_bridge()" in text
+    assert "def _cleanup_obsolete_payloads(active_key):" in text
+    assert "_cleanup_obsolete_payloads(key)" in text
     assert "button installBtn \"Install\"" in text
     assert "button uninstallBtn \"Uninstall\"" in text
     assert "dcc_mcp_3dsmax.stop_sidecar_bridge()" in text
     assert "from dcc_mcp_core.install_lifecycle import safe_remove_tree" in text
     assert "sys.modules.pop(name, None)" in text
-    assert "installed as an isolated version" in text
+    assert "installed and sidecar startup requested" in text
     assert "dcc-mcp-3dsmax install failed:" in text
     assert "Failed to stop dcc-mcp-3dsmax sidecar before uninstall" in text
     assert "uninstall requires a 3ds Max restart" in text
     assert "dcc-mcp-3dsmax uninstall failed:" in text
     assert "startup_script.unlink()" in text
+    assert "uninstall_marker = Path(r'''" in text
+    assert ") / 'dcc_mcp_3dsmax_uninstall_pending'" in text
 
 
 def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
@@ -79,6 +84,9 @@ def test_startup_script_installs_menu_after_adding_package_path(tmp_path):
     assert "sys.path.insert(0, str(pkg))" in text
     assert "dcc_mcp_3dsmax.install_menu()" in text
     assert "dcc_mcp_3dsmax.install_shutdown_callback()" in text
+    assert "dcc_mcp_3dsmax.start_sidecar_bridge()" in text
+    assert "def _cleanup_obsolete_payloads(active_root):" in text
+    assert "_cleanup_obsolete_payloads(install_payload)" in text
     assert "from dcc_mcp_core.install_lifecycle import safe_remove_tree" in text
 
 

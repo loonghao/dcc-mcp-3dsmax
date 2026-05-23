@@ -100,6 +100,10 @@ through the root variables above.
 The MZP installer uses isolated version directories under
 `<user scripts>/dcc_mcp_3dsmax/versions/`, so installing a new payload does not
 delete the version that may already be loaded by the running 3ds Max process.
+After install, the active payload is added to `sys.path`, obsolete payload
+directories are cleaned up where possible, and the sidecar bridge is started.
+The generated startup script repeats that activation on future 3ds Max launches,
+so the bridge comes back automatically after restart.
 Uninstall cleanup uses the import-light lifecycle helpers from `dcc-mcp-core`
 when available, so locked native files are reported as restart-required instead
 of disappearing into a generic `PermissionError`.

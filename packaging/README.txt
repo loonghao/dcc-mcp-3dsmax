@@ -9,8 +9,10 @@ Installation
 ------------
 1. Start 3ds Max.
 2. Drag dcc-mcp-3dsmax-<version>-win64.mzp into the 3ds Max viewport.
-3. Restart 3ds Max after the installer reports success.
-4. Use the DCC MCP menu to start or stop the sidecar bridge.
+3. The installer writes the startup script, activates the new version, removes
+   obsolete payload directories where possible, and starts the sidecar bridge.
+4. Future 3ds Max launches start the sidecar bridge automatically. Use the
+   DCC MCP menu only when you need to stop or manually restart it.
 
 The installer copies each payload into an isolated version directory:
   <user scripts>/dcc_mcp_3dsmax/versions/<version-id>
@@ -19,7 +21,8 @@ The active version is recorded in:
   <user scripts>/dcc_mcp_3dsmax/current.txt
 
 It also writes a startup MaxScript that adds the installed Python package
-directory to sys.path on launch and installs the DCC MCP menu.
+directory to sys.path on launch, installs the DCC MCP menu, cleans obsolete
+payload directories, and starts the sidecar bridge from the active payload.
 
 Uninstall cleanup uses dcc-mcp-core's import-light install lifecycle helpers
 when they are available. If a loaded native extension keeps files locked, the
@@ -58,9 +61,15 @@ To start the sidecar bridge:
 
 Uninstall
 ---------
-Delete these paths from your user 3ds Max scripts folders:
+Drag the MZP into 3ds Max and choose Uninstall. The uninstall action stops the
+running sidecar, removes the startup script, and deletes the install root. If
+loaded native files are still locked, removal is retried during the next 3ds Max
+startup from a marker outside the install root.
+
+Manual cleanup paths, if needed:
 
   <user scripts>/dcc_mcp_3dsmax
+  <user scripts>/dcc_mcp_3dsmax_uninstall_pending
   <user startup scripts>/dcc_mcp_3dsmax_startup.ms
 
 For more information:
