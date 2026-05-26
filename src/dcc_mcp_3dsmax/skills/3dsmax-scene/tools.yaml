@@ -11,6 +11,19 @@ tools:
       type: object
       additionalProperties: false
       properties: {}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 10
     read_only: true
     destructive: false
     idempotent: true
