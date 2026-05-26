@@ -6,7 +6,7 @@ through the DCC-MCP skill loader.
 
 | Skill family | Stage | Exported tools |
 | --- | --- | --- |
-| `3dsmax-scene` | scene | `3dsmax-scene__get_scene_info` |
+| `3dsmax-scene` | scene | `3dsmax-scene__get_scene_info`, `3dsmax-scene__list_scene_nodes`, `3dsmax-scene__list_cameras`, `3dsmax-scene__get_selection`, `3dsmax-scene__get_bounding_box`, `3dsmax-scene__get_node_visibility`, `3dsmax-scene__get_scene_metadata`, `3dsmax-scene__set_selection`, `3dsmax-scene__duplicate_nodes`, `3dsmax-scene__delete_nodes`, `3dsmax-scene__group_nodes`, `3dsmax-scene__parent_node`, `3dsmax-scene__unparent_node`, `3dsmax-scene__set_visibility`, `3dsmax-scene__center_pivots`, `3dsmax-scene__freeze_transforms` |
 | `3dsmax-modeling` | authoring | `3dsmax-modeling__create_box`, `3dsmax-modeling__create_sphere`, `3dsmax-modeling__create_cylinder`, `3dsmax-modeling__create_plane` |
 | `3dsmax-materials` | authoring | `3dsmax-materials__create_standard_material`, `3dsmax-materials__apply_material` |
 | `3dsmax-animation` | authoring | `3dsmax-animation__set_keyframe`, `3dsmax-animation__play_animation` |
