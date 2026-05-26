@@ -30,6 +30,19 @@ tools:
           description: Transform value. Rotation accepts optional fourth quaternion component.
           items:
             type: number
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
@@ -57,6 +70,19 @@ tools:
         to_frame:
           type: number
           description: Reserved end frame hint for callers; current implementation uses viewport playback.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false

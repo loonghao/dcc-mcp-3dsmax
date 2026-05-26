@@ -45,7 +45,8 @@ This starts the agent-callable embedded MCP runtime, registers bundled 3ds Max
 skills/tools, and routes scene edits through a random-port `/dispatch` bridge
 for main-thread execution. The 3ds Max instance is registered with the stable
 gateway at `http://127.0.0.1:9765/mcp`.
-See `docs/SIDECAR.md`.
+See `docs/SIDECAR.md` and the bundled skill index in
+`docs/BUNDLED_SKILLS.md`.
 
 The bootstrap also installs a `DCC MCP` menu with Start Server, Stop Server,
 Open Gateway Admin, and Print Status commands. 3ds Max shutdown triggers the

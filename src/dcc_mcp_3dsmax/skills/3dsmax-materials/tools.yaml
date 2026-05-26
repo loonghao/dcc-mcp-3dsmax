@@ -40,6 +40,19 @@ tools:
           maximum: 100
           default: 10.0
           description: Standard material glossiness value.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
@@ -72,6 +85,19 @@ tools:
           items:
             type: string
             minLength: 1
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
