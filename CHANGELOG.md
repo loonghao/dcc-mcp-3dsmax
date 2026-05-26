@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.8](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.7...v0.1.8) (2026-05-26)
+
+
+### Features
+
+* add asset readiness validation tools ([f62fc82](https://github.com/loonghao/dcc-mcp-3dsmax/commit/f62fc82f6ec221dfef8d59476247b3bc4ec0b59f)), closes [#29](https://github.com/loonghao/dcc-mcp-3dsmax/issues/29)
+* add camera lighting tools ([02f8ae1](https://github.com/loonghao/dcc-mcp-3dsmax/commit/02f8ae1f2b03a425245fae607f4245502312529b)), closes [#31](https://github.com/loonghao/dcc-mcp-3dsmax/issues/31)
+* add display metadata tools ([ea49078](https://github.com/loonghao/dcc-mcp-3dsmax/commit/ea4907800422d80c93d10ccfeb0d6d10fb552bbf)), closes [#30](https://github.com/loonghao/dcc-mcp-3dsmax/issues/30)
+* add geometry import export tools ([e2ce27b](https://github.com/loonghao/dcc-mcp-3dsmax/commit/e2ce27bf832ce0a915e7aecb48c085e711f50b66)), closes [#22](https://github.com/loonghao/dcc-mcp-3dsmax/issues/22)
+* add mesh cleanup normal tools ([a33b791](https://github.com/loonghao/dcc-mcp-3dsmax/commit/a33b79108d6aef24e40311fdbacfd5c051d93cb2)), closes [#23](https://github.com/loonghao/dcc-mcp-3dsmax/issues/23)
+* add render viewport tools ([2bc778e](https://github.com/loonghao/dcc-mcp-3dsmax/commit/2bc778ed0f6b54a0d0dbf437e782074317d07aa8)), closes [#26](https://github.com/loonghao/dcc-mcp-3dsmax/issues/26)
+* add rigging deformer tools ([dcac64b](https://github.com/loonghao/dcc-mcp-3dsmax/commit/dcac64b6ed1628cb669f03b6c1f286fd54e99190)), closes [#28](https://github.com/loonghao/dcc-mcp-3dsmax/issues/28)
+* add safe scripting introspection tools ([4f57e41](https://github.com/loonghao/dcc-mcp-3dsmax/commit/4f57e4157492093795f1e60f0f68da8556027d47)), closes [#20](https://github.com/loonghao/dcc-mcp-3dsmax/issues/20)
+* add uv atlas tools ([52af40d](https://github.com/loonghao/dcc-mcp-3dsmax/commit/52af40da407d3ab1a55991f9ed5d035a4cbcd3e6)), closes [#24](https://github.com/loonghao/dcc-mcp-3dsmax/issues/24)
+* expand animation timeline tools ([42e3944](https://github.com/loonghao/dcc-mcp-3dsmax/commit/42e39442fe03d87b952a4868674d378910b84821)), closes [#27](https://github.com/loonghao/dcc-mcp-3dsmax/issues/27)
+* expand material map tools ([ef033f7](https://github.com/loonghao/dcc-mcp-3dsmax/commit/ef033f78d06c2f698ce38912262601c0099fabc5)), closes [#25](https://github.com/loonghao/dcc-mcp-3dsmax/issues/25)
+* expand scene object management tools ([1a1768b](https://github.com/loonghao/dcc-mcp-3dsmax/commit/1a1768b94e05833584e004330eff0a3334323635)), closes [#21](https://github.com/loonghao/dcc-mcp-3dsmax/issues/21)
+
+
+### Bug Fixes
+
+* align 3dsmax core 0.17.34 ([618599f](https://github.com/loonghao/dcc-mcp-3dsmax/commit/618599fd43335cb481521e72a69858f955e78caf)), closes [#17](https://github.com/loonghao/dcc-mcp-3dsmax/issues/17) [#18](https://github.com/loonghao/dcc-mcp-3dsmax/issues/18)
+* use core dispatcher abstractions for 3ds Max ([efb3930](https://github.com/loonghao/dcc-mcp-3dsmax/commit/efb3930a893ad12f2b6abde3234f0d72b7d02205))
+
 ## [0.1.7](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.6...v0.1.7) (2026-05-23)
 
 
