@@ -137,14 +137,15 @@ class TestServerOptions:
 
         assert server._execution_bridge.runner is _executor.run_skill_script
 
-    def test_core_queue_dispatcher_attaches_to_http_route(self):
-        """Core queue dispatchers should be exposed to HTTP main-thread routing."""
-        from dcc_mcp_core.host import QueueDispatcher
+    def test_core_host_ui_dispatcher_attaches_to_http_route(self):
+        """Core HostUiDispatcherBase subclasses should be exposed to HTTP routing."""
+        from dcc_mcp_core import HostUiDispatcherBase
 
         from dcc_mcp_3dsmax import _executor
+        from dcc_mcp_3dsmax.dispatcher import MaxUiDispatcher
         from dcc_mcp_3dsmax.server import MaxMcpServer, MaxServerOptions
 
-        dispatcher = QueueDispatcher()
+        dispatcher = MaxUiDispatcher()
         server = MaxMcpServer(
             options=MaxServerOptions(
                 port=0,
@@ -154,10 +155,10 @@ class TestServerOptions:
             )
         )
 
+        assert isinstance(dispatcher, HostUiDispatcherBase)
         assert server._dcc_dispatcher is dispatcher
         assert server._execution_bridge.dispatcher is dispatcher
         assert server._execution_bridge.runner is _executor.run_skill_script
-        assert server._execution_bridge.resolve_host_dispatcher() is dispatcher
         assert server._inprocess_executor_registered is True
 
     def test_custom_execution_bridge_is_registered(self):
@@ -226,6 +227,56 @@ class TestExecution:
         )
         assert result == 42
 
+    def test_ui_dispatcher_uses_core_pump_controller(self):
+        """Interactive dispatch uses core queue lifecycle plus adapter timer glue."""
+        from dcc_mcp_core import HostUiDispatcherBase
+
+        from dcc_mcp_3dsmax.dispatcher import MaxUiDispatcher, MaxUiPump
+
+        class FakeTimer:
+            def __init__(self):
+                self.tick = None
+                self.installed = False
+                self.scheduled = 0
+
+            def install(self, tick):
+                self.tick = tick
+                self.installed = True
+
+            def uninstall(self):
+                self.installed = False
+                self.tick = None
+
+            def schedule_soon(self):
+                self.scheduled += 1
+
+            def fire(self):
+                assert self.tick is not None
+                return self.tick()
+
+        timer = FakeTimer()
+        dispatcher = MaxUiDispatcher()
+        pump = MaxUiPump(dispatcher, timer_adapter=timer)
+        completed = []
+
+        assert isinstance(dispatcher, HostUiDispatcherBase)
+        assert pump.install() is True
+        result = dispatcher.submit_async_callable(
+            "r1",
+            lambda: "ok",
+            on_complete=completed.append,
+        )
+
+        assert result["status"] == "pending"
+        assert timer.scheduled >= 1
+        timer.fire()
+        assert completed[0]["success"] is True
+        assert completed[0]["output"] == "ok"
+        assert pump.stats["total_executed"] == 1
+
+        pump.uninstall()
+        assert timer.installed is False
+
 
 class TestSidecar:
     """Test structured sidecar dispatch and bridge plumbing."""
@@ -286,50 +337,32 @@ class TestSidecar:
         assert max_bootstrap.main() == {"mode": "embedded-runtime"}
         assert calls == ["cleanup", "menu"]
 
-    def test_embedded_runtime_uses_core_host_dispatcher(self, monkeypatch):
+    def test_embedded_runtime_uses_core_ui_dispatcher(self, monkeypatch):
         """Default embedded runtime wires core's HTTP main-thread route."""
+        import dcc_mcp_3dsmax.dispatcher as dispatcher_module
         from dcc_mcp_3dsmax import max_bootstrap
 
         captured = {}
+        install_calls = []
+        fake_dispatcher = object()
+        fake_pump = types.SimpleNamespace(install=lambda: install_calls.append("install"))
         fake_server_module = types.SimpleNamespace(
             start_server=lambda **kwargs: captured.update(kwargs) or {"server": True}
         )
         monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server_module)
         monkeypatch.setattr(max_bootstrap, "start_bridge", lambda bridge_port=None: {"bridge": True})
-        monkeypatch.setattr(max_bootstrap, "attach_core_dispatcher", lambda value: captured.setdefault("pump", value))
+        monkeypatch.setattr(dispatcher_module, "create_dispatcher", lambda: (fake_dispatcher, fake_pump))
 
         result = max_bootstrap.start_embedded_sidecar_bridge()
 
         execution_bridge = captured["execution_bridge"]
         assert result["server"] == {"server": True}
-        assert execution_bridge.host_dispatcher is captured["pump"]
-        assert execution_bridge.resolve_host_dispatcher() is captured["pump"]
+        assert result["dispatcher"] is fake_dispatcher
+        assert result["pump"] is fake_pump
+        assert install_calls == ["install"]
+        assert captured["dispatcher"] is fake_dispatcher
+        assert execution_bridge.dispatcher is fake_dispatcher
         assert execution_bridge.default_thread_affinity == "main"
-        assert "dispatcher" not in captured
-
-    def test_bridge_pump_ticks_attached_core_dispatcher(self):
-        """The existing 3ds Max bridge pump also drains core host-dispatcher jobs."""
-        from dcc_mcp_3dsmax.sidecar import bridge
-
-        calls = []
-
-        class FakeDispatcher:
-            def pending(self):
-                return 1
-
-            def tick(self, max_jobs):
-                calls.append(max_jobs)
-                return types.SimpleNamespace(jobs_executed=2, more_pending=False)
-
-        bridge.attach_core_dispatcher(FakeDispatcher())
-        try:
-            status = bridge.bridge_status()
-            assert status["core_dispatcher_attached"] is True
-            assert status["core_dispatcher_pending"] == 1
-            assert bridge.process_pending_requests() == 2
-            assert calls == [16]
-        finally:
-            bridge.detach_core_dispatcher()
 
     def test_main_keeps_external_sidecar_as_explicit_mode(self, monkeypatch):
         """Operators can still opt into the process-isolated sidecar mode."""
@@ -553,37 +586,58 @@ class TestSidecar:
         finally:
             stop_bridge()
 
-    def test_qt_bridge_json_line_dispatch(self, tmp_path):
-        """The qtserver-compatible bridge dispatches JSON-line requests."""
-        import json
-        import socket
+    def test_qt_bridge_uses_core_qt_dispatcher(self, tmp_path, monkeypatch):
+        """The qtserver-compatible bridge delegates transport to dcc-mcp-core."""
+        import dcc_mcp_core.qt_dispatcher as core_qt
 
-        from dcc_mcp_3dsmax.sidecar.qt_bridge import start_qt_bridge, stop_qt_bridge
+        from dcc_mcp_3dsmax.sidecar import qt_bridge
 
         script = tmp_path / "action_echo.py"
         script.write_text("def main(value=None):\n    return {'success': True, 'data': {'value': value}}\n", encoding="utf-8")
 
-        server = start_qt_bridge()
-        port = int(server.server_address[1])
+        captured = {}
+
+        class FakeHandle(dict):
+            def __init__(self):
+                super().__init__(
+                    {
+                        "host": "127.0.0.1",
+                        "port": 45678,
+                        "url": "qtserver://127.0.0.1:45678",
+                    }
+                )
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        fake_handle = FakeHandle()
+
+        def fake_start_qt_server(**kwargs):
+            captured.update(kwargs)
+            return fake_handle
+
+        monkeypatch.setattr(core_qt, "start_qt_server", fake_start_qt_server)
+        monkeypatch.delenv(qt_bridge.ENV_QT_BRIDGE_PORT, raising=False)
+
+        server = qt_bridge.start_qt_bridge()
         try:
-            payload = {
-                "id": "req-1",
-                "method": "dispatch",
-                "params": {
+            assert server is fake_handle
+            assert qt_bridge.qt_bridge_port() == 45678
+            assert os.environ[qt_bridge.ENV_QT_BRIDGE_PORT] == "45678"
+            result = captured["dispatch_handler"](
+                {
                     "script_path": str(script),
                     "args": {"value": 13},
                     "request_id": "req-1",
-                },
-            }
-            with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
-                sock.sendall(json.dumps(payload).encode("utf-8") + b"\n")
-                response = sock.makefile("rb").readline()
-            result = json.loads(response)
-            assert result["id"] == "req-1"
-            assert result["result"]["success"] is True
-            assert result["result"]["data"]["value"] == 13
+                }
+            )
+            assert result["success"] is True
+            assert result["data"]["value"] == 13
+            assert result["request_id"] == "req-1"
         finally:
-            stop_qt_bridge()
+            qt_bridge.stop_qt_bridge()
+        assert fake_handle.closed is True
 
 
 class TestMenuIntegration:

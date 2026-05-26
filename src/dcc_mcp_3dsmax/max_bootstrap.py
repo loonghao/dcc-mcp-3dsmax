@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import atexit
-import json
 import os
 import site
 import subprocess
@@ -14,7 +13,7 @@ from typing import Any, Optional
 
 from dcc_mcp_3dsmax.__version__ import __version__
 from dcc_mcp_3dsmax._constants import DEFAULT_GATEWAY_PORT
-from dcc_mcp_3dsmax.sidecar.bridge import attach_core_dispatcher, execute_on_main_thread, start_bridge, stop_bridge
+from dcc_mcp_3dsmax.sidecar.bridge import start_bridge, stop_bridge
 from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, stop_qt_bridge
 
 _sidecar_process: Optional[subprocess.Popen] = None
@@ -140,16 +139,18 @@ def start_embedded_sidecar_bridge(
 ) -> Any:
     """Start the agent-callable embedded MCP runtime with main-thread execution."""
     from dcc_mcp_core import HostExecutionBridge  # noqa: PLC0415
-    from dcc_mcp_core.host import QueueDispatcher  # noqa: PLC0415
 
+    from dcc_mcp_3dsmax import _executor  # noqa: PLC0415
+    from dcc_mcp_3dsmax.dispatcher import create_dispatcher  # noqa: PLC0415
     from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
 
     bridge = start_bridge(bridge_port)
-    host_dispatcher = QueueDispatcher()
-    attach_core_dispatcher(host_dispatcher)
+    dispatcher, pump = create_dispatcher()
+    if pump is not None:
+        pump.install()
     execution_bridge = HostExecutionBridge(
-        host_dispatcher=host_dispatcher,
-        runner=_run_skill_script_via_bridge,
+        dispatcher=dispatcher,
+        runner=_executor.run_skill_script,
         default_thread_affinity="main",
     )
     server = start_server(
@@ -157,17 +158,11 @@ def start_embedded_sidecar_bridge(
         register_builtins=register_builtins,
         include_bundled=include_bundled,
         gateway_port=DEFAULT_GATEWAY_PORT,
+        dispatcher=dispatcher,
         execution_bridge=execution_bridge,
     )
     print("dcc-mcp-3dsmax MCP gateway available at http://127.0.0.1:{}/mcp".format(DEFAULT_GATEWAY_PORT))
-    return {"bridge": bridge, "server": server}
-
-
-def _run_skill_script_via_bridge(script_path: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Route MCP tool execution through the 3ds Max main-thread bridge."""
-    raw = execute_on_main_thread({"script_path": script_path, "args": params})
-    result = json.loads(raw)
-    return result if isinstance(result, dict) else {"success": True, "data": result}
+    return {"bridge": bridge, "dispatcher": dispatcher, "pump": pump, "server": server}
 
 
 def _server_binary_path() -> Path:

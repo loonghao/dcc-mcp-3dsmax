@@ -20,7 +20,6 @@ _owned_env_port: Optional[str] = None
 _request_queue: "queue.Queue[BridgeRequest]" = queue.Queue()
 _active_requests = 0
 _active_lock = threading.Lock()
-_core_dispatcher: Any = None
 
 try:
     import pymxs  # noqa: PLC0415
@@ -43,36 +42,14 @@ def bridge_status() -> dict:
     """Return bridge health data for `/health`."""
     with _active_lock:
         active = _active_requests
-    pending = None
-    if _core_dispatcher is not None:
-        pending_fn = getattr(_core_dispatcher, "pending", None)
-        if callable(pending_fn):
-            try:
-                pending = pending_fn()
-            except Exception:
-                pending = None
     return {
         "status": "ok",
         "port": _current_port(),
         "main_thread_pump": _RT is not None,
-        "core_dispatcher_attached": _core_dispatcher is not None,
-        "core_dispatcher_pending": pending,
         "busy": active > 0,
         "active_requests": active,
         "queue_size": _request_queue.qsize(),
     }
-
-
-def attach_core_dispatcher(dispatcher: Any) -> None:
-    """Let the bridge pump drain core 0.17.34 host-dispatcher work."""
-    global _core_dispatcher
-    _core_dispatcher = dispatcher
-
-
-def detach_core_dispatcher() -> None:
-    """Stop draining a previously attached core host dispatcher."""
-    global _core_dispatcher
-    _core_dispatcher = None
 
 
 def process_pending_requests() -> int:
@@ -96,27 +73,7 @@ def process_pending_requests() -> int:
                 _active_requests -= 1
             request.done.set()
         executed += 1
-    executed += _tick_core_dispatcher()
     return executed
-
-
-def _tick_core_dispatcher(max_jobs: int = 16) -> int:
-    dispatcher = _core_dispatcher
-    if dispatcher is None:
-        return 0
-    tick = getattr(dispatcher, "tick", None)
-    if not callable(tick):
-        return 0
-    try:
-        outcome = tick(max_jobs)
-    except Exception:
-        return 0
-    jobs_executed = getattr(outcome, "jobs_executed", None)
-    if isinstance(jobs_executed, int):
-        return jobs_executed
-    if isinstance(outcome, dict):
-        return int(outcome.get("jobs_executed") or outcome.get("executed") or 0)
-    return 0
 
 
 def execute_on_main_thread(payload: Mapping[str, Any], timeout: float = 30.0) -> str:
@@ -178,7 +135,6 @@ def stop_bridge() -> None:
     if _owned_env_port is not None and os.environ.get(ENV_BRIDGE_PORT) == _owned_env_port:
         os.environ.pop(ENV_BRIDGE_PORT, None)
     _owned_env_port = None
-    detach_core_dispatcher()
     _uninstall_main_thread_pump()
 
 
