@@ -10,6 +10,7 @@ through the DCC-MCP skill loader.
 | `3dsmax-modeling` | authoring | `3dsmax-modeling__create_box`, `3dsmax-modeling__create_sphere`, `3dsmax-modeling__create_cylinder`, `3dsmax-modeling__create_plane` |
 | `3dsmax-materials` | authoring | `3dsmax-materials__create_standard_material`, `3dsmax-materials__apply_material` |
 | `3dsmax-animation` | authoring | `3dsmax-animation__set_keyframe`, `3dsmax-animation__play_animation` |
+| `3dsmax-scripting` | authoring | `3dsmax-scripting__execute_python`, `3dsmax-scripting__execute_maxscript`, `3dsmax-scripting__run_python_check`, `3dsmax-scripting__list_runtime_symbols`, `3dsmax-scripting__inspect_runtime_symbol`, `3dsmax-scripting__list_macros`, `3dsmax-scripting__resolve_node_reference`, `3dsmax-scripting__reload_adapter_module` |
 
 Every bundled tool declares:
 
