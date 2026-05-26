@@ -1,0 +1,329 @@
+tools:
+  - name: execute_python
+    description: >-
+      Execute explicit Python code inside the current 3ds Max session with
+      pymxs, rt, and runtime pre-bound. Use only when typed tools cannot
+      express the requested operation.
+    source_file: action_execute_python.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      required: [code, confirm_execution]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Python statements to execute on the 3ds Max main thread.
+        confirm_execution:
+          type: boolean
+          const: true
+          description: Must be true to acknowledge arbitrary Python execution.
+        expression:
+          type: string
+          minLength: 1
+          description: Optional Python expression to evaluate after code runs.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: false
+    destructive: true
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: true
+
+  - name: execute_maxscript
+    description: >-
+      Execute explicit MaxScript in the current 3ds Max session via
+      pymxs.runtime.execute. Use only when typed tools cannot express the
+      requested operation.
+    source_file: action_execute_maxscript.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      required: [script, confirm_execution]
+      additionalProperties: false
+      properties:
+        script:
+          type: string
+          minLength: 1
+          description: MaxScript code to execute on the 3ds Max main thread.
+        confirm_execution:
+          type: boolean
+          const: true
+          description: Must be true to acknowledge arbitrary MaxScript execution.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: false
+    destructive: true
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: true
+
+  - name: run_python_check
+    description: >-
+      Evaluate a small Python expression against pymxs, rt, and runtime for
+      host-side debugging checks.
+    source_file: action_run_python_check.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      required: [expression]
+      additionalProperties: false
+      properties:
+        expression:
+          type: string
+          minLength: 1
+          description: Python expression to evaluate.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: true
+
+  - name: list_runtime_symbols
+    description: >-
+      List pymxs runtime symbols with shallow callable/type metadata.
+    source_file: action_list_runtime_symbols.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        prefix:
+          type: string
+          description: Optional case-insensitive symbol prefix filter.
+        include_private:
+          type: boolean
+          default: false
+          description: Include names that start with an underscore.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+          description: Maximum number of symbols to return.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+
+  - name: inspect_runtime_symbol
+    description: >-
+      Inspect one pymxs runtime symbol and return callable, type, signature,
+      and first-line documentation metadata where available.
+    source_file: action_inspect_runtime_symbol.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Runtime symbol name to inspect.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+
+  - name: list_macros
+    description: >-
+      List host macro/action entries when pymxs.runtime.macros exposes a list
+      API in the running 3ds Max version.
+    source_file: action_list_macros.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+          description: Maximum number of macro entries to return.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+
+  - name: resolve_node_reference
+    description: >-
+      Resolve a node by explicit node name or object handle and return a
+      stable identity envelope.
+    source_file: action_resolve_node_reference.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        node_name:
+          type: string
+          minLength: 1
+          description: Node name to resolve.
+        handle:
+          type: integer
+          description: 3ds Max object handle to resolve.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+
+  - name: reload_adapter_module
+    description: >-
+      Reload an adapter-owned dcc_mcp_3dsmax Python submodule during developer
+      debugging without restarting the host.
+    source_file: action_reload_adapter_module.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 5
+    input_schema:
+      type: object
+      required: [module_name]
+      additionalProperties: false
+      properties:
+        module_name:
+          type: string
+          minLength: 1
+          pattern: "^dcc_mcp_3dsmax\\."
+          description: Adapter-owned module name to import or reload.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false
