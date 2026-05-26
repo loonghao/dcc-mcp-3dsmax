@@ -20,12 +20,11 @@ from typing import Any, Dict, Optional, Tuple
 
 # Import third-party modules
 try:
-    from dcc_mcp_core import PyPumpedDispatcher
+    from dcc_mcp_core.host import QueueDispatcher as CoreQueueDispatcher
 except ImportError:
-    PyPumpedDispatcher = None
+    CoreQueueDispatcher = None
 
 # Import local modules
-from dcc_mcp_3dsmax.dispatcher.job import DEFAULT_JOB_TIMEOUT_MS, _JobEntry
 from dcc_mcp_3dsmax.dispatcher.standalone import MaxStandaloneDispatcher
 from dcc_mcp_3dsmax.dispatcher.ui import MaxUiDispatcher
 
@@ -103,7 +102,7 @@ class MaxUiPump:
             return True
 
         try:
-            import clr
+            import clr  # noqa: F401, PLC0415
             from System.Windows.Forms import Timer
 
             self._timer = Timer()
@@ -187,7 +186,7 @@ def create_dispatcher(
     """
     try:
         import pymxs
-        rt = pymxs.runtime
+        getattr(pymxs, "runtime", None)
         # 3ds Max doesn't have a direct "batch" query like Maya's cmds.about(batch=True)
         # For now, assume interactive if pymxs is available
         is_batch = False
@@ -208,15 +207,15 @@ def create_pumped_dispatcher(
     """Create a Rust-backed dispatcher for the current 3ds Max environment.
 
     This is an alternative to :func:`create_dispatcher` that returns the
-    core's ``PyPumpedDispatcher`` instead of :class:`MaxUiDispatcher`.
+    core's ``QueueDispatcher`` instead of :class:`MaxUiDispatcher`.
     """
-    if PyPumpedDispatcher is None:
-        logger.warning("create_pumped_dispatcher: PyPumpedDispatcher not available")
+    if CoreQueueDispatcher is None:
+        logger.warning("create_pumped_dispatcher: core QueueDispatcher not available")
         return MaxStandaloneDispatcher(), None
 
     try:
         import pymxs
-        rt = pymxs.runtime
+        getattr(pymxs, "runtime", None)
         is_batch = False
     except ImportError:
         is_batch = True
@@ -224,16 +223,15 @@ def create_pumped_dispatcher(
     if is_batch:
         return MaxStandaloneDispatcher(), None
 
-    core_dispatcher = PyPumpedDispatcher(budget_ms=int(budget_ms))
+    core_dispatcher = CoreQueueDispatcher()
     pump = _CorePump(core_dispatcher, budget_ms=budget_ms)
     return core_dispatcher, pump
 
 
 class _CorePump:
-    """Idle-event pump adapter for :class:`PyPumpedDispatcher` in 3ds Max.
+    """Idle-event pump adapter for core ``QueueDispatcher`` in 3ds Max.
 
-    Uses a ``dotNet`` timer to periodically call
-    :meth:`PyPumpedDispatcher.pump_with_budget`.
+    Uses a ``dotNet`` timer to periodically call ``QueueDispatcher.tick``.
     """
 
     def __init__(self, dispatcher: Any, budget_ms: float = DEFAULT_BUDGET_MS) -> None:
@@ -252,7 +250,7 @@ class _CorePump:
         if self._installed:
             return True
         try:
-            import clr
+            import clr  # noqa: F401, PLC0415
             from System.Windows.Forms import Timer
 
             self._timer = Timer()
@@ -293,8 +291,10 @@ class _CorePump:
     def _on_timer_tick(self, sender, e) -> None:
         """Timer tick handler — drain pending Rust-side main-thread jobs."""
         try:
-            stats = self._dispatcher.pump_with_budget(int(self._budget_ms))
-            remaining = stats.get("remaining", 0) if isinstance(stats, dict) else 0
+            outcome = self._dispatcher.tick(int(self._budget_ms))
+            remaining = getattr(outcome, "more_pending", False)
+            if isinstance(outcome, dict):
+                remaining = bool(outcome.get("more_pending") or outcome.get("remaining"))
             if remaining > 0:
                 # Timer will fire again
                 pass

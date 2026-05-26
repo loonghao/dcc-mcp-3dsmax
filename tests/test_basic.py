@@ -137,6 +137,29 @@ class TestServerOptions:
 
         assert server._execution_bridge.runner is _executor.run_skill_script
 
+    def test_core_queue_dispatcher_attaches_to_http_route(self):
+        """Core queue dispatchers should be exposed to HTTP main-thread routing."""
+        from dcc_mcp_core.host import QueueDispatcher
+
+        from dcc_mcp_3dsmax import _executor
+        from dcc_mcp_3dsmax.server import MaxMcpServer, MaxServerOptions
+
+        dispatcher = QueueDispatcher()
+        server = MaxMcpServer(
+            options=MaxServerOptions(
+                port=0,
+                dispatcher=dispatcher,
+                enable_gateway_failover=False,
+                job_storage_path="",
+            )
+        )
+
+        assert server._dcc_dispatcher is dispatcher
+        assert server._execution_bridge.dispatcher is dispatcher
+        assert server._execution_bridge.runner is _executor.run_skill_script
+        assert server._execution_bridge.resolve_host_dispatcher() is dispatcher
+        assert server._inprocess_executor_registered is True
+
     def test_custom_execution_bridge_is_registered(self):
         """Explicit execution bridges are passed through to core registration."""
         from dcc_mcp_core import HostExecutionBridge
@@ -262,6 +285,51 @@ class TestSidecar:
 
         assert max_bootstrap.main() == {"mode": "embedded-runtime"}
         assert calls == ["cleanup", "menu"]
+
+    def test_embedded_runtime_uses_core_host_dispatcher(self, monkeypatch):
+        """Default embedded runtime wires core's HTTP main-thread route."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        captured = {}
+        fake_server_module = types.SimpleNamespace(
+            start_server=lambda **kwargs: captured.update(kwargs) or {"server": True}
+        )
+        monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server_module)
+        monkeypatch.setattr(max_bootstrap, "start_bridge", lambda bridge_port=None: {"bridge": True})
+        monkeypatch.setattr(max_bootstrap, "attach_core_dispatcher", lambda value: captured.setdefault("pump", value))
+
+        result = max_bootstrap.start_embedded_sidecar_bridge()
+
+        execution_bridge = captured["execution_bridge"]
+        assert result["server"] == {"server": True}
+        assert execution_bridge.host_dispatcher is captured["pump"]
+        assert execution_bridge.resolve_host_dispatcher() is captured["pump"]
+        assert execution_bridge.default_thread_affinity == "main"
+        assert "dispatcher" not in captured
+
+    def test_bridge_pump_ticks_attached_core_dispatcher(self):
+        """The existing 3ds Max bridge pump also drains core host-dispatcher jobs."""
+        from dcc_mcp_3dsmax.sidecar import bridge
+
+        calls = []
+
+        class FakeDispatcher:
+            def pending(self):
+                return 1
+
+            def tick(self, max_jobs):
+                calls.append(max_jobs)
+                return types.SimpleNamespace(jobs_executed=2, more_pending=False)
+
+        bridge.attach_core_dispatcher(FakeDispatcher())
+        try:
+            status = bridge.bridge_status()
+            assert status["core_dispatcher_attached"] is True
+            assert status["core_dispatcher_pending"] == 1
+            assert bridge.process_pending_requests() == 2
+            assert calls == [16]
+        finally:
+            bridge.detach_core_dispatcher()
 
     def test_main_keeps_external_sidecar_as_explicit_mode(self, monkeypatch):
         """Operators can still opt into the process-isolated sidecar mode."""
@@ -650,12 +718,34 @@ class TestVersion:
 
         assert _max_version_label() == "unknown"
 
+    def test_sidecar_display_name_maps_raw_2024_version(self, monkeypatch):
+        """Admin display-name fallback should map raw maxVersion 26000 to 2024."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        runtime = types.SimpleNamespace(maxVersion=lambda: (26000,))
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+
+        assert max_bootstrap._max_version_label() == "2024"
+
     def test_version_probe_import(self):
         """Test that version probe can be imported."""
         from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string, is_3dsmax_available
 
         assert get_3dsmax_version_string is not None
         assert is_3dsmax_available is not None
+
+    def test_version_probe_reports_2024_from_raw_26000(self, monkeypatch):
+        """3ds Max 2024 reports raw major version 26000."""
+        from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string
+
+        pymxs = types.SimpleNamespace(
+            runtime=types.SimpleNamespace(
+                maxVersion=lambda: (26000, 64, 0, 26, 2, 11, 20199, 2024),
+            )
+        )
+        monkeypatch.setitem(sys.modules, "pymxs", pymxs)
+
+        assert get_3dsmax_version_string() == "2024"
 
     def test_version_string_not_crash(self):
         """Test that version detection doesn't crash."""

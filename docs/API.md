@@ -203,6 +203,7 @@ For advanced users who need to dispatch work to the 3ds Max main thread:
 from dcc_mcp_3dsmax.dispatcher import (
     MaxUiDispatcher,
     MaxStandaloneDispatcher,
+    CoreQueueDispatcher,
     create_dispatcher,
     create_pumped_dispatcher,
     check_3dsmax_cancelled,
@@ -221,6 +222,12 @@ dispatcher, pump = create_dispatcher()
 if pump:
     pump.install()  # Start the idle-event pump
 ```
+
+### `create_pumped_dispatcher(budget_ms=8)`
+
+Create a core `QueueDispatcher` and a 3ds Max timer pump for the current
+interactive host. This is the dispatcher type that dcc-mcp-core 0.17.34 can
+attach to HTTP `tools/call` routing for main-thread tools.
 
 ## Runtime Bridge
 

@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from dcc_mcp_3dsmax.__version__ import __version__
 from dcc_mcp_3dsmax._constants import DEFAULT_GATEWAY_PORT
-from dcc_mcp_3dsmax.sidecar.bridge import execute_on_main_thread, start_bridge, stop_bridge
+from dcc_mcp_3dsmax.sidecar.bridge import attach_core_dispatcher, execute_on_main_thread, start_bridge, stop_bridge
 from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, stop_qt_bridge
 
 _sidecar_process: Optional[subprocess.Popen] = None
@@ -140,11 +140,15 @@ def start_embedded_sidecar_bridge(
 ) -> Any:
     """Start the agent-callable embedded MCP runtime with main-thread execution."""
     from dcc_mcp_core import HostExecutionBridge  # noqa: PLC0415
+    from dcc_mcp_core.host import QueueDispatcher  # noqa: PLC0415
 
     from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
 
     bridge = start_bridge(bridge_port)
+    host_dispatcher = QueueDispatcher()
+    attach_core_dispatcher(host_dispatcher)
     execution_bridge = HostExecutionBridge(
+        host_dispatcher=host_dispatcher,
         runner=_run_skill_script_via_bridge,
         default_thread_affinity="main",
     )
@@ -271,7 +275,7 @@ def _max_version_label() -> str:
         except Exception:  # noqa: BLE001
             return _sanitize_max_version_label(str(version))
         if major >= 10000:
-            return str(major // 1000)
+            return _marketing_year_from_version_number(major)
         return _sanitize_max_version_label(str(major))
     except Exception:  # noqa: BLE001
         return "unknown"
@@ -294,6 +298,13 @@ def _version_sequence_year(version: Any) -> Optional[str]:
         if label:
             return label
     return _year_label(str(version))
+
+
+def _marketing_year_from_version_number(version_num: int) -> str:
+    major = version_num // 1000
+    if major >= 15:
+        return str(major + 1998)
+    return str(major)
 
 
 def _year_label(value: Any) -> Optional[str]:
