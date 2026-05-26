@@ -12,7 +12,7 @@ Module            Purpose
 ``cancel``        ``check_3dsmax_cancelled`` cooperative checkpoint
 ``ui``            ``MaxUiDispatcher`` (interactive)
 ``standalone``    ``MaxStandaloneDispatcher`` (batch)
-``pump``          ``MaxUiPump`` / ``_CorePump`` + factory helpers
+``pump``          ``MaxUiPump`` / core ``QueueDispatcher`` pump helpers
 ================  ====================================================
 
 See: https://github.com/loonghao/dcc-mcp-3dsmax/issues/1
@@ -23,12 +23,12 @@ from __future__ import annotations
 
 # Import local modules
 from dcc_mcp_3dsmax.dispatcher.cancel import check_3dsmax_cancelled
-from dcc_mcp_3dsmax.dispatcher.job import DEFAULT_JOB_TIMEOUT_MS, _JobEntry, _current_job
+from dcc_mcp_3dsmax.dispatcher.job import DEFAULT_JOB_TIMEOUT_MS, _current_job, _JobEntry
 from dcc_mcp_3dsmax.dispatcher.pump import (
     DEFAULT_BUDGET_MS,
     OVERRUN_MULTIPLIER,
+    CoreQueueDispatcher,
     MaxUiPump,
-    PyPumpedDispatcher,
     _CorePump,
     create_dispatcher,
     create_pumped_dispatcher,
@@ -52,7 +52,7 @@ __all__ = [
     "create_dispatcher",
     "create_pumped_dispatcher",
     # Core dispatcher used by create_pumped_dispatcher
-    "PyPumpedDispatcher",
+    "CoreQueueDispatcher",
     # Internals exposed for advanced use
     "_CorePump",
     "_JobEntry",

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # 3ds Max version mapping (major version -> marketing version)
 VERSION_MAP = {
+    26000: "2024",
     25000: "2023",
     24000: "2022",
     23000: "2021",
@@ -37,7 +38,7 @@ def get_3dsmax_version_string() -> str:
     Returns
     -------
     str
-        Version string like ``"2023"`` or ``"unknown"``.
+        Version string like ``"2024"`` or ``"unknown"``.
     """
     try:
         import pymxs  # noqa: PLC0415
@@ -60,7 +61,7 @@ def get_3dsmax_version_number() -> Optional[int]:
     Returns
     -------
     Optional[int]
-        Version number like ``25000`` (for 2023) or ``None``.
+        Version number like ``26000`` (for 2024) or ``None``.
     """
     try:
         import pymxs  # noqa: PLC0415
@@ -85,7 +86,7 @@ def is_3dsmax_available() -> bool:
     try:
         import pymxs  # noqa: PLC0415
 
-        return True
+        return pymxs is not None
     except ImportError:
         return False
 
@@ -107,11 +108,10 @@ def _parse_version(version_num: int) -> str:
     if version_num in VERSION_MAP:
         return VERSION_MAP[version_num]
 
-    # Try to parse year from version number
-    # Version numbers are typically X000 where X is year offset
-    # 25000 = 2023, 24000 = 2022, etc.
-    for raw_ver, marketing in VERSION_MAP.items():
-        if version_num >= raw_ver:
-            return marketing
+    # Version numbers are typically X000 where X maps to year X + 1998:
+    # 26000 = 2024, 25000 = 2023, 24000 = 2022, etc.
+    major = version_num // 1000
+    if major >= 15:
+        return str(major + 1998)
 
     return f"version_{version_num}"

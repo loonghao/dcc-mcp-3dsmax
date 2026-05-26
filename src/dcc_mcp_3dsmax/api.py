@@ -9,7 +9,7 @@ from __future__ import annotations
 
 # Import built-in modules
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,8 @@ def with_max(func: Callable) -> Callable:
             import pymxs  # noqa: PLC0415
         except ImportError:
             return max_error("pymxs not available - not running inside 3ds Max")
+        if getattr(pymxs, "runtime", None) is None:
+            return max_error("pymxs runtime not available - not running inside 3ds Max")
 
         try:
             return func(*args, **kwargs)
@@ -204,7 +206,7 @@ def is_max_available() -> bool:
     """
     try:
         import pymxs  # noqa: PLC0415
-        return True
+        return pymxs is not None
     except ImportError:
         return False
 
