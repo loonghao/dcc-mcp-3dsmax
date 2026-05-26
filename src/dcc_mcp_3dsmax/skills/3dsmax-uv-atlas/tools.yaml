@@ -1,0 +1,321 @@
+tools:
+  - name: list_uv_channels
+    description: List UV/map channels for explicit targets.
+    source_file: action_list_uv_channels.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 10
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
+
+  - name: create_uv_channel
+    description: Create or enable a UV/map channel on explicit targets.
+    source_file: action_create_uv_channel.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 15
+    read_only: false
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
+
+  - name: delete_uv_channel
+    description: Delete or disable a UV/map channel on explicit targets.
+    source_file: action_delete_uv_channel.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 15
+    read_only: false
+    destructive: true
+    idempotent: false
+    annotations: {read_only_hint: false, destructive_hint: true, idempotent_hint: false, open_world_hint: false}
+
+  - name: copy_uv_channel
+    description: Copy UV data from one channel to another on explicit targets.
+    source_file: action_copy_uv_channel.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [source_channel, target_channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        source_channel: {type: integer, minimum: 1, maximum: 99}
+        target_channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 15
+    read_only: false
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
+
+  - name: get_uv_shell_summary
+    description: Summarize UV shells/elements for one channel on explicit targets.
+    source_file: action_get_uv_shell_summary.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 10
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
+
+  - name: apply_uv_projection
+    description: Add a UVW Map projection modifier to explicit targets.
+    source_file: action_apply_uv_projection.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel, projection]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+        projection: {type: string, enum: [planar, box, cylindrical, spherical]}
+        length: {type: number, exclusiveMinimum: 0}
+        width: {type: number, exclusiveMinimum: 0}
+        height: {type: number, exclusiveMinimum: 0}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 30
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: false, open_world_hint: false}
+
+  - name: unwrap_uvs
+    description: Add an Unwrap UVW modifier to explicit targets.
+    source_file: action_unwrap_uvs.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 30
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: false, open_world_hint: false}
+
+  - name: pack_uvs
+    description: Pack UVs on explicit targets using Unwrap UVW where available.
+    source_file: action_pack_uvs.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+        padding: {type: number, minimum: 0, default: 0.02}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 30
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: false, open_world_hint: false}
+
+  - name: detect_uv_overlaps
+    description: Report known UV overlaps for a channel on explicit targets.
+    source_file: action_detect_uv_overlaps.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 10
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
+
+  - name: normalize_uvs
+    description: Normalize UVs on explicit targets using Unwrap UVW where available.
+    source_file: action_normalize_uvs.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      required: [channel]
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+        channel: {type: integer, minimum: 1, maximum: 99}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 30
+    read_only: false
+    destructive: false
+    idempotent: false
+    annotations: {read_only_hint: false, destructive_hint: false, idempotent_hint: false, open_world_hint: false}
+
+  - name: prepare_texture_atlas
+    description: Collect material and bitmap usage for texture-atlas planning.
+    source_file: action_prepare_texture_atlas.py
+    execution: sync
+    affinity: main
+    enforce_thread_affinity: true
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        node_names: {type: array, items: {type: string, minLength: 1}}
+        handles: {type: array, items: {type: integer}}
+        use_selection: {type: boolean, default: false}
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success: {type: boolean}
+        status: {type: string}
+        message: {type: string}
+        data: {type: object}
+    timeout_hint_secs: 20
+    read_only: true
+    destructive: false
+    idempotent: true
+    annotations: {read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false}
