@@ -27,11 +27,10 @@ classifiers = [
 ]
 
 dependencies = [
-    # Align with dcc-mcp-core 0.17.34: HostExecutionBridge host_dispatcher
-    # routing, QueueDispatcher main-thread queues, diagnostics/execution
-    # contracts, and current gateway/admin readiness surfaces.
-    "dcc-mcp-core>=0.17.34,<1.0.0",
-    "dcc-mcp-server>=0.17.34,<1.0.0",
+    # Align with dcc-mcp-core 0.17.36: shared HostUiDispatcherBase,
+    # HostPumpController, universal Qt dispatcher, and SidecarActionDispatcher.
+    "dcc-mcp-core>=0.17.36,<1.0.0",
+    "dcc-mcp-server>=0.17.36,<1.0.0",
 ]
 
 [project.optional-dependencies]
