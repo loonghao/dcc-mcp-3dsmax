@@ -1,20 +1,13 @@
-"""Structured dispatcher used by the 3ds Max sidecar bridge.
-
-The bridge accepts JSON payloads rather than arbitrary Python source.  A
-payload may identify either a registered action name or an explicit script
-path supplied by an external sidecar process:
-
-``{"action": "3dsmax-modeling__create_box", "args": {"width": 10}}``
-``{"script_path": ".../action_create_box.py", "args": {"width": 10}}``
-"""
+"""3ds Max sidecar action dispatch using the core sidecar dispatcher."""
 
 from __future__ import annotations
 
 import json
 import logging
-import traceback
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, Union
+
+from dcc_mcp_core import SidecarActionDispatcher
 
 from dcc_mcp_3dsmax import _executor
 
@@ -23,97 +16,53 @@ _BUILTIN_SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills"
 logger = logging.getLogger(__name__)
 
 
-def dispatch(payload: Mapping[str, Any] | str) -> str:
+class _NoServer:
+    """Placeholder used when explicit script dispatch does not need a server."""
+
+
+def dispatch(payload: Union[Mapping[str, Any], str]) -> str:
     """Dispatch a sidecar payload against the currently running server."""
     return dispatch_payload(payload)
 
 
 def dispatch_payload(
-    payload: Mapping[str, Any] | str,
+    payload: Union[Mapping[str, Any], str],
     *,
     server_lookup: Optional[Callable[[], Any]] = None,
 ) -> str:
     """Dispatch *payload* and return a single-line JSON response."""
-    lookup = server_lookup or _default_server_lookup
-    try:
-        return _dispatch_inner(payload, server_lookup=lookup)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("3ds Max sidecar dispatch failed unexpectedly")
-        return _json_response(
-            _envelope(
-                success=False,
-                error="dispatch-failed",
-                message="unexpected dispatcher error: {}".format(exc),
-                traceback=traceback.format_exc(),
-                request_id=_safe_request_id(payload),
-            )
-        )
+    return _json_response(dispatch_payload_dict(payload, server_lookup=server_lookup))
 
 
-def _dispatch_inner(
-    payload: Mapping[str, Any] | str,
+def dispatch_payload_dict(
+    payload: Union[Mapping[str, Any], str],
     *,
-    server_lookup: Callable[[], Any],
-) -> str:
-    parsed = _coerce_payload(payload)
+    server_lookup: Optional[Callable[[], Any]] = None,
+) -> dict:
+    """Dispatch *payload* and return the normalized response dict."""
+    parsed = _normalise_payload(payload)
     if parsed is None:
-        return _json_response(
-            _envelope(
-                success=False,
-                error="payload-malformed",
-                message="payload must be a JSON object",
-                request_id="",
-            )
-        )
+        return {
+            "success": False,
+            "error": "payload-malformed",
+            "message": "payload must be a JSON object",
+            "request_id": "",
+        }
 
-    args = parsed.get("args") or {}
-    if not isinstance(args, Mapping):
-        return _json_response(
-            _envelope(
-                success=False,
-                error="payload-malformed",
-                message="payload.args must be a JSON object",
-                request_id=str(parsed.get("request_id") or ""),
-            )
-        )
-
-    action_name = parsed.get("action")
-    if action_name is not None and not isinstance(action_name, str):
-        return _json_response(
-            _envelope(
-                success=False,
-                error="payload-malformed",
-                message="payload.action must be a string",
-                request_id=str(parsed.get("request_id") or ""),
-            )
-        )
-
-    script_path = _script_path_from_payload(parsed)
-    if script_path is None and action_name:
-        script_path = _resolve_script_path(server_lookup(), action_name)
-    if script_path is None and action_name:
-        script_path = _resolve_bundled_script_path(action_name)
-
-    if script_path is None:
-        return _json_response(
-            _envelope(
-                success=False,
-                error="unknown-action",
-                message="no script_path provided and action {!r} is not registered".format(action_name),
-                request_id=str(parsed.get("request_id") or ""),
-                action=action_name,
-            )
-        )
-
-    result = _executor.run_skill_script(str(script_path), dict(args))
-    if not isinstance(result, Mapping):
-        result = {"success": True, "message": str(result)}
-
-    body = dict(result)
+    lookup = server_lookup or _default_server_lookup
+    dispatcher = SidecarActionDispatcher(
+        "3dsmax",
+        server_provider=lambda: _server_or_placeholder(lookup),
+        action_resolver=_resolve_action_source,
+        executor=_run_skill_script,
+        bundled_skill_roots=[_BUILTIN_SKILLS_DIR],
+    )
+    body = dispatcher.dispatch_payload(parsed)
     body.setdefault("request_id", str(parsed.get("request_id") or ""))
-    if action_name:
-        body.setdefault("action", action_name)
-    return _json_response(body)
+    action = parsed.get("action")
+    if isinstance(action, str) and action:
+        body.setdefault("action", action)
+    return body
 
 
 def _default_server_lookup() -> Any:
@@ -122,25 +71,50 @@ def _default_server_lookup() -> Any:
     return get_server()
 
 
-def _coerce_payload(payload: Mapping[str, Any] | str) -> Optional[Mapping[str, Any]]:
+def _normalise_payload(payload: Union[Mapping[str, Any], str]) -> Optional[dict]:
     if isinstance(payload, str):
         try:
             payload = json.loads(payload)
         except json.JSONDecodeError:
             return None
-    return payload if isinstance(payload, Mapping) else None
-
-
-def _script_path_from_payload(payload: Mapping[str, Any]) -> Optional[Path]:
-    raw = payload.get("script_path") or payload.get("source_file")
-    if not isinstance(raw, str) or not raw.strip():
+    if not isinstance(payload, Mapping):
         return None
-    path = Path(raw)
-    return path if path.is_file() else None
+
+    parsed = dict(payload)
+    if not isinstance(parsed.get("action"), str):
+        source = parsed.get("script_path") or parsed.get("source_file")
+        if isinstance(source, str) and source.strip():
+            parsed["action"] = Path(source).stem
+    return parsed
+
+
+def _server_or_placeholder(server_lookup: Callable[[], Any]) -> Any:
+    try:
+        return server_lookup() or _NoServer()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("sidecar server lookup failed: %s", exc)
+        return _NoServer()
+
+
+def _resolve_action_source(action_name: str, *, server: Any = None, payload: Any = None) -> Optional[str]:
+    _ = payload
+    path = _resolve_script_path(server, action_name)
+    if path is not None:
+        return str(path)
+    path = _resolve_bundled_script_path(action_name)
+    return str(path) if path is not None else None
+
+
+def _run_skill_script(request: Any) -> Any:
+    result = _executor.run_skill_script(request.script_path, request.args)
+    if isinstance(result, Mapping) and result.get("status") == "error" and "success" not in result:
+        result = dict(result)
+        result["success"] = False
+    return result
 
 
 def _resolve_script_path(server: Any, action_name: str) -> Optional[Path]:
-    if server is None:
+    if server is None or isinstance(server, _NoServer):
         return None
 
     try:
@@ -192,17 +166,6 @@ def _get_value(obj: Any, name: str) -> Any:
     if isinstance(obj, Mapping):
         return obj.get(name)
     return getattr(obj, name, None)
-
-
-def _safe_request_id(payload: Any) -> str:
-    parsed = _coerce_payload(payload)
-    if parsed is None:
-        return ""
-    return str(parsed.get("request_id") or "")
-
-
-def _envelope(**kwargs: Any) -> dict:
-    return dict(kwargs)
 
 
 def _json_response(body: Mapping[str, Any]) -> str:

@@ -51,6 +51,19 @@ tools:
                   type: number
                 z:
                   type: number
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
@@ -102,6 +115,19 @@ tools:
                   type: number
                 z:
                   type: number
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
@@ -158,6 +184,19 @@ tools:
                   type: number
                 z:
                   type: number
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false
@@ -214,6 +253,19 @@ tools:
                   type: number
                 z:
                   type: number
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 15
     read_only: false
     destructive: false
     idempotent: false

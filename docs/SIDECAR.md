@@ -125,12 +125,17 @@ For lower-level tests, send an explicit script path:
 GET http://127.0.0.1:<random-port>/health
 ```
 
-Returns bridge state, queue size, and whether a 3ds Max main-thread pump is
-active.
+Returns bridge state, queue size, whether a 3ds Max main-thread pump is active,
+and whether the local bridge is currently busy.
 
 ## Threading Model
 
 The HTTP listener runs on a background thread. When `pymxs` is available, the
-bridge queues requests and drains them from a hidden MaxScript timer, keeping
-scene edits on the 3ds Max UI thread. Outside 3ds Max, requests execute inline
-so unit tests can exercise the protocol without Autodesk binaries.
+legacy bridge queues direct `/dispatch` requests and drains them from a hidden
+MaxScript timer, keeping those scene edits on the 3ds Max UI thread. Gateway
+`tools/call` traffic uses the shared `dcc-mcp-core` 0.17.36
+`HostUiDispatcherBase` plus `HostPumpController` path; the adapter only maps
+3ds Max's .NET timer to the core timer contract. The `qtserver://` sidecar path
+uses the core universal Qt dispatcher and core `SidecarActionDispatcher`.
+Outside 3ds Max, direct bridge requests execute inline so unit tests can
+exercise the protocol without Autodesk binaries.

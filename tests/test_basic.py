@@ -187,14 +187,15 @@ class TestServerOptions:
 
         assert server._execution_bridge.runner is _executor.run_skill_script
 
-    def test_core_queue_dispatcher_attaches_to_http_main_thread_route(self):
-        """Core QueueDispatcher instances should wire the HTTP DccExecutorHandle path."""
-        from dcc_mcp_core.host import QueueDispatcher
+    def test_core_host_ui_dispatcher_attaches_to_http_route(self):
+        """Core HostUiDispatcherBase subclasses should be exposed to HTTP routing."""
+        from dcc_mcp_core import HostUiDispatcherBase
 
         from dcc_mcp_3dsmax import _executor
+        from dcc_mcp_3dsmax.dispatcher import MaxUiDispatcher
         from dcc_mcp_3dsmax.server import MaxMcpServer, MaxServerOptions
 
-        dispatcher = QueueDispatcher()
+        dispatcher = MaxUiDispatcher()
         server = MaxMcpServer(
             options=MaxServerOptions(
                 port=0,
@@ -204,8 +205,9 @@ class TestServerOptions:
             )
         )
 
+        assert isinstance(dispatcher, HostUiDispatcherBase)
         assert server._dcc_dispatcher is dispatcher
-        assert server._execution_bridge.dispatcher is None
+        assert server._execution_bridge.dispatcher is dispatcher
         assert server._execution_bridge.runner is _executor.run_skill_script
         assert server._inprocess_executor_registered is True
 
@@ -335,34 +337,32 @@ class TestSidecar:
         assert max_bootstrap.main() == {"mode": "embedded-runtime"}
         assert calls == ["cleanup", "menu"]
 
-    def test_sidecar_display_name_maps_raw_2024_version(self, monkeypatch):
-        """Admin display-name fallback should map raw maxVersion 26000 to 2024."""
-        from dcc_mcp_3dsmax import max_bootstrap
-
-        runtime = types.SimpleNamespace(maxVersion=lambda: (26000,))
-        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
-
-        assert max_bootstrap._max_version_label() == "2024"
-
-    def test_embedded_runtime_uses_core_queue_dispatcher(self, monkeypatch):
-        """Default embedded runtime wires core's main-thread dispatcher route."""
+    def test_embedded_runtime_uses_core_ui_dispatcher(self, monkeypatch):
+        """Default embedded runtime wires core's HTTP main-thread route."""
+        import dcc_mcp_3dsmax.dispatcher as dispatcher_module
         from dcc_mcp_3dsmax import max_bootstrap
 
         captured = {}
-        dispatcher = object()
-
-        fake_server_module = types.SimpleNamespace(start_server=lambda **kwargs: captured.update(kwargs) or {"server": True})
+        install_calls = []
+        fake_dispatcher = object()
+        fake_pump = types.SimpleNamespace(install=lambda: install_calls.append("install"))
+        fake_server_module = types.SimpleNamespace(
+            start_server=lambda **kwargs: captured.update(kwargs) or {"server": True}
+        )
         monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server_module)
         monkeypatch.setattr(max_bootstrap, "start_bridge", lambda bridge_port=None: {"bridge": True})
-        monkeypatch.setattr(max_bootstrap, "_create_core_queue_dispatcher", lambda: dispatcher)
-        monkeypatch.setattr(max_bootstrap, "_install_core_dispatcher_pump", lambda value: captured.setdefault("pump", value))
+        monkeypatch.setattr(dispatcher_module, "create_dispatcher", lambda: (fake_dispatcher, fake_pump))
 
         result = max_bootstrap.start_embedded_sidecar_bridge()
 
+        execution_bridge = captured["execution_bridge"]
         assert result["server"] == {"server": True}
-        assert captured["dispatcher"] is dispatcher
-        assert captured["pump"] is dispatcher
-        assert "execution_bridge" not in captured
+        assert result["dispatcher"] is fake_dispatcher
+        assert result["pump"] is fake_pump
+        assert install_calls == ["install"]
+        assert captured["dispatcher"] is fake_dispatcher
+        assert execution_bridge.dispatcher is fake_dispatcher
+        assert execution_bridge.default_thread_affinity == "main"
 
     def test_main_keeps_external_sidecar_as_explicit_mode(self, monkeypatch):
         """Operators can still opt into the process-isolated sidecar mode."""
@@ -765,7 +765,7 @@ class TestSceneAuthoringActions:
             / "action_execute_python.py"
         )
 
-        result = action.main("print('hello from max')\nresult = {'node_count': len(rt.nodes)}")
+        result = action.main("print('hello from max')\nresult = {'node_count': len(rt.nodes)}", confirm_execution=True)
 
         assert result["success"] is True
         assert result["data"]["stdout"] == "hello from max\n"
@@ -785,7 +785,7 @@ class TestSceneAuthoringActions:
             / "action_execute_python.py"
         )
 
-        result = action.main("result = 1")
+        result = action.main("result = 1", confirm_execution=True)
 
         assert result["status"] == "error"
         assert "disabled" in result["message"]
@@ -803,7 +803,7 @@ class TestSceneAuthoringActions:
             / "action_execute_maxscript.py"
         )
 
-        result = action.main("selection.count")
+        result = action.main("selection.count", confirm_execution=True)
 
         assert result["success"] is True
         assert runtime.executed_script == "selection.count"
@@ -823,7 +823,7 @@ class TestSceneAuthoringActions:
             / "action_execute_maxscript.py"
         )
 
-        result = action.main("selection.count")
+        result = action.main("selection.count", confirm_execution=True)
 
         assert result["status"] == "error"
         assert "disabled" in result["message"]

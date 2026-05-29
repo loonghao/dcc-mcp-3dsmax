@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dcc-mcp-3dsmax"
-version = "0.1.7"
+version = "0.1.8"
 description = "3ds Max plugin for the DCC Model Context Protocol (MCP) ecosystem — embeds a Streamable HTTP MCP server directly inside 3ds Max"
 authors = [{ name = "Long Hao", email = "hal.long@outlook.com" }]
 readme = "README.md"
@@ -27,12 +27,10 @@ classifiers = [
 ]
 
 dependencies = [
-    # Align with dcc-mcp-core 0.17.23: import-light lifecycle helpers,
-    # lazy public exports, DccServerOptions composition root,
-    # HostExecutionBridge, diagnostics/execution contracts, minimal-mode
-    # progressive loading, and search_skills(scope/limit).
-    "dcc-mcp-core>=0.17.23,<1.0.0",
-    "dcc-mcp-server>=0.17.23,<1.0.0",
+    # Align with dcc-mcp-core 0.17.36: shared HostUiDispatcherBase,
+    # HostPumpController, universal Qt dispatcher, and SidecarActionDispatcher.
+    "dcc-mcp-core>=0.17.36,<1.0.0",
+    "dcc-mcp-server>=0.17.36,<1.0.0",
 ]
 
 [project.optional-dependencies]

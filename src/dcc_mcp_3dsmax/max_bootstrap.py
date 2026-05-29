@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import atexit
-import builtins
 import os
 import site
 import subprocess
@@ -19,8 +18,6 @@ from dcc_mcp_3dsmax.sidecar.qt_bridge import qt_bridge_port, start_qt_bridge, st
 
 _sidecar_process: Optional[subprocess.Popen] = None
 _cleanup_registered = False
-_core_dispatcher: Any = None
-_CORE_PUMP_NAME = "_dcc_mcp_3dsmax_core_dispatcher_tick"
 
 
 def start_embedded_server(port: Optional[int] = None, **kwargs: Any) -> Any:
@@ -109,7 +106,6 @@ def stop_sidecar_bridge(timeout: float = 5.0) -> None:
     global _sidecar_process
 
     _stop_embedded_server_if_loaded()
-    _uninstall_core_dispatcher_pump()
 
     process = _sidecar_process
     _sidecar_process = None
@@ -142,74 +138,31 @@ def start_embedded_sidecar_bridge(
     include_bundled: bool = True,
 ) -> Any:
     """Start the agent-callable embedded MCP runtime with main-thread execution."""
+    from dcc_mcp_core import HostExecutionBridge  # noqa: PLC0415
+
+    from dcc_mcp_3dsmax import _executor  # noqa: PLC0415
+    from dcc_mcp_3dsmax.dispatcher import create_dispatcher  # noqa: PLC0415
     from dcc_mcp_3dsmax.server import start_server  # noqa: PLC0415
 
     bridge = start_bridge(bridge_port)
-    dispatcher = _create_core_queue_dispatcher()
-    _install_core_dispatcher_pump(dispatcher)
+    dispatcher, pump = create_dispatcher()
+    if pump is not None:
+        pump.install()
+    execution_bridge = HostExecutionBridge(
+        dispatcher=dispatcher,
+        runner=_executor.run_skill_script,
+        default_thread_affinity="main",
+    )
     server = start_server(
         port=int(os.environ.get("DCC_MCP_3DSMAX_PORT", "0")),
         register_builtins=register_builtins,
         include_bundled=include_bundled,
         gateway_port=DEFAULT_GATEWAY_PORT,
         dispatcher=dispatcher,
+        execution_bridge=execution_bridge,
     )
     print("dcc-mcp-3dsmax MCP gateway available at http://127.0.0.1:{}/mcp".format(DEFAULT_GATEWAY_PORT))
-    return {"bridge": bridge, "server": server}
-
-
-def _create_core_queue_dispatcher() -> Any:
-    from dcc_mcp_core.host import QueueDispatcher  # noqa: PLC0415
-
-    return QueueDispatcher()
-
-
-def _install_core_dispatcher_pump(dispatcher: Any) -> None:
-    """Drain core QueueDispatcher work on 3ds Max's UI thread."""
-    global _core_dispatcher
-    _core_dispatcher = dispatcher
-    try:
-        import pymxs  # noqa: PLC0415
-
-        runtime = pymxs.runtime
-    except Exception:  # noqa: BLE001
-        return
-
-    def tick() -> None:
-        try:
-            dispatcher.tick(16)
-        except Exception:
-            pass
-
-    setattr(builtins, _CORE_PUMP_NAME, tick)
-    runtime.execute(
-        r'''
-global dccMcp3dsmaxCoreDispatcherRollout
-try (destroyDialog dccMcp3dsmaxCoreDispatcherRollout) catch()
-rollout dccMcp3dsmaxCoreDispatcherRollout "dcc-mcp-3dsmax Core Dispatcher" width:1 height:1
-(
-    timer coreDispatcherTimer interval:50 active:true
-    on coreDispatcherTimer tick do
-    (
-        python.Execute "import builtins; builtins._dcc_mcp_3dsmax_core_dispatcher_tick()"
-    )
-)
-createDialog dccMcp3dsmaxCoreDispatcherRollout 1 1 pos:[-32000,-32000] style:#(#style_toolwindow)
-'''
-    )
-
-
-def _uninstall_core_dispatcher_pump() -> None:
-    global _core_dispatcher
-    try:
-        import pymxs  # noqa: PLC0415
-
-        pymxs.runtime.execute("try (destroyDialog dccMcp3dsmaxCoreDispatcherRollout) catch()")
-    except Exception:  # noqa: BLE001
-        pass
-    if hasattr(builtins, _CORE_PUMP_NAME):
-        delattr(builtins, _CORE_PUMP_NAME)
-    _core_dispatcher = None
+    return {"bridge": bridge, "dispatcher": dispatcher, "pump": pump, "server": server}
 
 
 def _server_binary_path() -> Path:

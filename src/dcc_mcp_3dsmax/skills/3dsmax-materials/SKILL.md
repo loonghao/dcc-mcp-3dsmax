@@ -1,9 +1,10 @@
 ---
 name: 3dsmax-materials
 description: >-
-  Domain skill - create and assign 3ds Max Standard materials on the main
-  thread. Use when authoring simple materials or assigning existing materials.
-  Not for renderer-specific shader graphs.
+  Domain skill - inspect, create, edit, and assign 3ds Max materials and
+  bitmap maps on the main thread. Use when authoring Standard, Physical, or
+  PBR-friendly materials, assigning node materials, and reporting texture
+  connections.
 license: MIT
 compatibility: "dcc-mcp-core 0.17+, 3ds Max 2024+"
 metadata:
@@ -12,15 +13,17 @@ metadata:
     version: "1.0.0"
     layer: domain
     stage: authoring
-    search-hint: "3ds Max material create standard material apply assign diffuse specular"
-    tags: "3dsmax, materials, shader, assignment"
+    search-hint: "3ds Max material create inspect assign bitmap texture map physical pbr roughness metalness missing paths"
+    tags: "3dsmax, materials, shader, assignment, bitmap, pbr"
     tools: tools.yaml
 ---
 
 # 3ds Max Material Tools
 
-Create and assign Standard materials in the current scene. All tools touch the
-live scene through `pymxs`, so they declare `affinity: main`.
+Inspect, create, edit, and assign 3ds Max materials in the current scene. All
+tools touch the live scene through `pymxs`, so they declare `affinity: main`.
 
 Tool contracts live in `tools.yaml`. `apply_material` uses current selection
-when `node_names` is omitted.
+when `node_names` is omitted. Renderer-specific behavior stays optional and
+returns clear errors or warnings when the host does not expose that material
+class or map slot.

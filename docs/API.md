@@ -203,6 +203,8 @@ For advanced users who need to dispatch work to the 3ds Max main thread:
 from dcc_mcp_3dsmax.dispatcher import (
     MaxUiDispatcher,
     MaxStandaloneDispatcher,
+    MaxDotNetTimerAdapter,
+    MaxUiPump,
     create_dispatcher,
     create_pumped_dispatcher,
     check_3dsmax_cancelled,
@@ -222,6 +224,13 @@ if pump:
     pump.install()  # Start the idle-event pump
 ```
 
+### `create_pumped_dispatcher(budget_ms=8)`
+
+Backward-compatible alias for `create_dispatcher()`. Interactive hosts return a
+`MaxUiDispatcher` backed by `dcc-mcp-core` 0.17.36 `HostUiDispatcherBase` plus a
+`MaxUiPump` wrapper around `HostPumpController`; standalone/headless contexts
+return `MaxStandaloneDispatcher` and no pump.
+
 ## Runtime Bridge
 
 Start the agent-callable runtime bridge inside 3ds Max:
@@ -233,6 +242,8 @@ main()
 ```
 
 This starts the embedded adapter runtime, registers bundled 3ds Max tools, and
-routes scene edits through a random-port main-thread HTTP bridge. Normal MZP
-installs do not need `DCC_MCP_3DSMAX_PORT` or `DCC_MCP_GATEWAY_PORT`.
+routes gateway `tools/call` scene edits through the shared core UI dispatcher.
+The random-port main-thread HTTP bridge remains available for local diagnostics.
+Normal MZP installs do not need `DCC_MCP_3DSMAX_PORT` or
+`DCC_MCP_GATEWAY_PORT`.
 See `docs/SIDECAR.md` for the full protocol.

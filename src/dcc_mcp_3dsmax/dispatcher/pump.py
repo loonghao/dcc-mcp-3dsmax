@@ -1,200 +1,157 @@
-"""Idle-event pump schedulers + dispatcher factory helpers for 3ds Max.
+"""3ds Max host-pump helpers backed by ``dcc-mcp-core``.
 
-This module provides pump implementations that integrate with 3ds Max's
-event loop to drain the main-thread job queue.
-
-For 3ds Max, we use a ``dotNet`` timer as the idle-event equivalent,
-since 3ds Max doesn't have a direct ``scriptJob(event=['idle', ...])``
-equivalent like Maya.
-
-See: https://github.com/loonghao/dcc-mcp-3dsmax/issues/1
+The core ``HostPumpController`` owns pump lifecycle, scheduling, backoff, and
+statistics.  This module only maps 3ds Max's .NET timer to the core timer
+adapter contract and chooses the interactive versus standalone dispatcher.
 """
 
-# Import future modules
 from __future__ import annotations
 
-# Import built-in modules
 import logging
-import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
-# Import third-party modules
-try:
-    from dcc_mcp_core import PyPumpedDispatcher
-except ImportError:
-    PyPumpedDispatcher = None
+from dcc_mcp_core import HostPumpController, HostPumpSnapshot
 
-# Import local modules
-from dcc_mcp_3dsmax.dispatcher.job import DEFAULT_JOB_TIMEOUT_MS, _JobEntry
 from dcc_mcp_3dsmax.dispatcher.standalone import MaxStandaloneDispatcher
 from dcc_mcp_3dsmax.dispatcher.ui import MaxUiDispatcher
 
 logger = logging.getLogger(__name__)
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-
-#: Default time budget (milliseconds) per pump cycle.
 DEFAULT_BUDGET_MS = 8
-
-#: Overrun threshold — any pump tick that spends more than ``budget_ms`` × this
-#: multiplier counts as an ``overrun_cycles``.
 OVERRUN_MULTIPLIER = 2.0
 
 
+class MaxDotNetTimerAdapter:
+    """Adapt ``System.Windows.Forms.Timer`` to core's host pump contract."""
+
+    def __init__(self, default_interval_ms: int = 100) -> None:
+        self.default_interval_ms = max(int(default_interval_ms), 1)
+        self._timer: Any = None
+        self._tick: Optional[Callable[[], Optional[float]]] = None
+        self._installed = False
+
+    @property
+    def installed(self) -> bool:
+        return self._installed
+
+    def install(self, tick: Callable[[], Optional[float]]) -> None:
+        self._tick = tick
+        if self._installed:
+            return
+        try:
+            import clr  # noqa: F401, PLC0415
+            from System.Windows.Forms import Timer  # noqa: PLC0415
+        except ImportError:
+            raise RuntimeError("3ds Max .NET timer is not available")
+
+        self._timer = Timer()
+        self._timer.Interval = self.default_interval_ms
+        self._timer.Tick += self._on_timer_tick
+        self._installed = True
+
+    def uninstall(self) -> None:
+        timer = self._timer
+        self._timer = None
+        self._tick = None
+        self._installed = False
+        if timer is None:
+            return
+        try:
+            timer.Stop()
+            timer.Tick -= self._on_timer_tick
+            timer.Dispose()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("MaxDotNetTimerAdapter: error removing timer: %s", exc)
+
+    def schedule_soon(self) -> None:
+        self._start(0.0)
+
+    def _on_timer_tick(self, sender: Any, event: Any) -> None:
+        _ = sender, event
+        timer = self._timer
+        if timer is not None:
+            timer.Stop()
+        tick = self._tick
+        if tick is None or not self._installed:
+            return
+        interval = tick()
+        if interval is not None and self._installed:
+            self._start(interval)
+
+    def _start(self, interval_secs: float) -> None:
+        timer = self._timer
+        if timer is None or not self._installed:
+            return
+        timer.Stop()
+        timer.Interval = max(int(interval_secs * 1000), 1)
+        timer.Start()
+
+
 class MaxUiPump:
-    """Cooperative time-slice scheduler driven by 3ds Max idle events.
-
-    Uses a ``dotNet`` timer to periodically drain pending main-thread
-    jobs from the attached :class:`MaxUiDispatcher` up to *budget_ms*
-    milliseconds.
-
-    Parameters
-    ----------
-    dispatcher:
-        The :class:`MaxUiDispatcher` whose main-thread queue to drain.
-    budget_ms:
-        Maximum milliseconds to spend draining per tick.
-    """
+    """Compatibility wrapper around ``HostPumpController`` for 3ds Max."""
 
     def __init__(
         self,
         dispatcher: MaxUiDispatcher,
         budget_ms: float = DEFAULT_BUDGET_MS,
+        *,
+        timer_adapter: Optional[MaxDotNetTimerAdapter] = None,
     ) -> None:
         self._dispatcher = dispatcher
-        self._budget_ms = budget_ms
-        self._timer = None
-        self._installed = False
-        self._stats: Dict[str, float] = {
-            "total_executed": 0,
-            "total_cycles": 0,
-            "total_elapsed_ms": 0.0,
-            "overrun_cycles": 0,
-            "longest_job_ms": 0.0,
-        }
+        self._timer_adapter = timer_adapter or MaxDotNetTimerAdapter()
+        self._controller = HostPumpController(
+            dispatcher,
+            self._timer_adapter,
+            budget_ms=max(int(budget_ms), 1),
+        )
+        attach = getattr(dispatcher, "attach_pump_controller", None)
+        if callable(attach):
+            attach(self._controller)
 
-    # ── Lifecycle ─────────────────────────────────────────────────────────────
+    @property
+    def controller(self) -> HostPumpController:
+        return self._controller
 
     @property
     def is_installed(self) -> bool:
-        """``True`` if the pump timer is currently active."""
-        return self._installed
+        return bool(self._controller.is_running)
 
     @property
     def budget_ms(self) -> float:
-        """Current time budget per pump cycle."""
-        return self._budget_ms
+        return float(self._controller.budget_ms)
 
     @budget_ms.setter
     def budget_ms(self, value: float) -> None:
-        self._budget_ms = max(1.0, value)
+        self._controller.budget_ms = max(int(value), 1)
 
     @property
     def stats(self) -> Dict[str, Any]:
-        """Cumulative pump statistics."""
-        return dict(self._stats)
+        return _snapshot_to_legacy_stats(self._controller.stats)
 
     def install(self) -> bool:
-        """Install the pump timer with 3ds Max.
-
-        Returns ``True`` if installation succeeded or is already installed.
-        """
-        if self._installed:
-            return True
-
         try:
-            import clr
-            from System.Windows.Forms import Timer
-
-            self._timer = Timer()
-            self._timer.Interval = 100  # 100ms tick
-            self._timer.Tick += self._on_timer_tick
-            self._timer.Start()
-
-            self._installed = True
+            self._controller.start()
             logger.info(
-                "MaxUiPump installed (timer interval=%d ms, budget=%.1f ms)",
-                self._timer.Interval,
-                self._budget_ms,
+                "MaxUiPump installed via HostPumpController (budget=%d ms)",
+                self._controller.budget_ms,
             )
             return True
-        except ImportError:
-            logger.warning("MaxUiPump: dotNet not available — install skipped")
-            return False
-        except Exception as exc:
-            logger.error("MaxUiPump: failed to install timer: %s", exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("MaxUiPump: install skipped: %s", exc)
             return False
 
     def uninstall(self) -> None:
-        """Remove the pump timer from 3ds Max."""
-        if not self._installed:
-            return
+        self._controller.stop()
+        detach = getattr(self._dispatcher, "detach_pump_controller", None)
+        if callable(detach):
+            detach(self._controller)
 
-        try:
-            if self._timer is not None:
-                self._timer.Stop()
-                self._timer.Tick -= self._on_timer_tick
-                self._timer.Dispose()
-                logger.info("MaxUiPump uninstalled")
-        except Exception as exc:
-            logger.warning("MaxUiPump: error removing timer: %s", exc)
-        finally:
-            self._timer = None
-            self._installed = False
-
-    # ── Pump implementation ───────────────────────────────────────────────────
-
-    def _on_timer_tick(self, sender, e) -> None:
-        """Timer tick handler — drain pending jobs within the budget."""
-        start = time.monotonic()
-        executed, remaining = self._dispatcher.drain_queue(self._budget_ms)
-
-        elapsed_ms = (time.monotonic() - start) * 1000.0
-        self._stats["total_executed"] += executed
-        self._stats["total_cycles"] += 1
-        self._stats["total_elapsed_ms"] += elapsed_ms
-
-        if elapsed_ms > self._budget_ms * OVERRUN_MULTIPLIER:
-            self._stats["overrun_cycles"] += 1
-
-        if executed > 0:
-            avg_job_ms = elapsed_ms / executed
-            worst_job_ms = elapsed_ms if executed == 1 else max(elapsed_ms, avg_job_ms)
-            if worst_job_ms > self._stats["longest_job_ms"]:
-                self._stats["longest_job_ms"] = worst_job_ms
-
-        if remaining > 0:
-            # Timer will fire again, no need to poke
-            pass
-
-
-# ── Factory helpers ───────────────────────────────────────────────────────────
 
 def create_dispatcher(
     budget_ms: float = DEFAULT_BUDGET_MS,
 ) -> Tuple[Any, Optional[MaxUiPump]]:
-    """Create the appropriate dispatcher for the current 3ds Max environment.
-
-    Returns a ``(dispatcher, pump)`` pair where *dispatcher* is a
-    :class:`MaxUiDispatcher` (interactive) or
-    :class:`MaxStandaloneDispatcher` (batch), and *pump* is a
-    :class:`MaxUiPump` or ``None`` respectively.
-
-    Returns
-    -------
-    tuple[MaxUiDispatcher | MaxStandaloneDispatcher, MaxUiPump | None]
-        A ``(dispatcher, pump)`` pair.  The pump is ``None`` in standalone mode.
-    """
-    try:
-        import pymxs
-        rt = pymxs.runtime
-        # 3ds Max doesn't have a direct "batch" query like Maya's cmds.about(batch=True)
-        # For now, assume interactive if pymxs is available
-        is_batch = False
-    except ImportError:
-        is_batch = True
-
-    if is_batch:
+    """Create the dispatcher/pump pair for the current 3ds Max environment."""
+    if _is_standalone_environment():
         return MaxStandaloneDispatcher(), None
 
     dispatcher = MaxUiDispatcher()
@@ -204,99 +161,30 @@ def create_dispatcher(
 
 def create_pumped_dispatcher(
     budget_ms: float = DEFAULT_BUDGET_MS,
-) -> Tuple[Any, Optional["_CorePump"]]:
-    """Create a Rust-backed dispatcher for the current 3ds Max environment.
+) -> Tuple[Any, Optional[MaxUiPump]]:
+    """Backward-compatible alias for the core-backed dispatcher factory."""
+    return create_dispatcher(budget_ms=budget_ms)
 
-    This is an alternative to :func:`create_dispatcher` that returns the
-    core's ``PyPumpedDispatcher`` instead of :class:`MaxUiDispatcher`.
-    """
-    if PyPumpedDispatcher is None:
-        logger.warning("create_pumped_dispatcher: PyPumpedDispatcher not available")
-        return MaxStandaloneDispatcher(), None
 
+def _is_standalone_environment() -> bool:
     try:
-        import pymxs
-        rt = pymxs.runtime
-        is_batch = False
+        import pymxs  # noqa: PLC0415
+
+        getattr(pymxs, "runtime", None)
+        return False
     except ImportError:
-        is_batch = True
-
-    if is_batch:
-        return MaxStandaloneDispatcher(), None
-
-    core_dispatcher = PyPumpedDispatcher(budget_ms=int(budget_ms))
-    pump = _CorePump(core_dispatcher, budget_ms=budget_ms)
-    return core_dispatcher, pump
+        return True
 
 
-class _CorePump:
-    """Idle-event pump adapter for :class:`PyPumpedDispatcher` in 3ds Max.
-
-    Uses a ``dotNet`` timer to periodically call
-    :meth:`PyPumpedDispatcher.pump_with_budget`.
-    """
-
-    def __init__(self, dispatcher: Any, budget_ms: float = DEFAULT_BUDGET_MS) -> None:
-        self._dispatcher = dispatcher
-        self._budget_ms = budget_ms
-        self._timer = None
-        self._installed = False
-
-    @property
-    def is_installed(self) -> bool:
-        """``True`` if the timer is currently active."""
-        return self._installed
-
-    def install(self) -> bool:
-        """Install the pump timer."""
-        if self._installed:
-            return True
-        try:
-            import clr
-            from System.Windows.Forms import Timer
-
-            self._timer = Timer()
-            self._timer.Interval = 100
-            self._timer.Tick += self._on_timer_tick
-            self._timer.Start()
-
-            self._installed = True
-            logger.info(
-                "_CorePump installed (timer interval=%d ms, budget=%.1f ms)",
-                self._timer.Interval,
-                self._budget_ms,
-            )
-            return True
-        except ImportError:
-            logger.warning("_CorePump: dotNet not available — install skipped")
-            return False
-        except Exception as exc:
-            logger.error("_CorePump: failed to install timer: %s", exc)
-            return False
-
-    def uninstall(self) -> None:
-        """Remove the pump timer."""
-        if not self._installed:
-            return
-        try:
-            if self._timer is not None:
-                self._timer.Stop()
-                self._timer.Tick -= self._on_timer_tick
-                self._timer.Dispose()
-                logger.info("_CorePump uninstalled")
-        except Exception as exc:
-            logger.warning("_CorePump: error removing timer: %s", exc)
-        finally:
-            self._timer = None
-            self._installed = False
-
-    def _on_timer_tick(self, sender, e) -> None:
-        """Timer tick handler — drain pending Rust-side main-thread jobs."""
-        try:
-            stats = self._dispatcher.pump_with_budget(int(self._budget_ms))
-            remaining = stats.get("remaining", 0) if isinstance(stats, dict) else 0
-            if remaining > 0:
-                # Timer will fire again
-                pass
-        except Exception as exc:
-            logger.debug("_CorePump._on_timer_tick error: %s", exc)
+def _snapshot_to_legacy_stats(snapshot: HostPumpSnapshot) -> Dict[str, Any]:
+    return {
+        "total_executed": snapshot.drained_jobs,
+        "total_cycles": snapshot.ticks,
+        "total_elapsed_ms": snapshot.last_elapsed_ms,
+        "overrun_cycles": snapshot.overrun_count,
+        "longest_job_ms": snapshot.last_elapsed_ms,
+        "queue_size": snapshot.queue_size,
+        "active_jobs": snapshot.active_jobs,
+        "interval_secs": snapshot.interval_secs,
+        "shutdown": snapshot.shutdown,
+    }
