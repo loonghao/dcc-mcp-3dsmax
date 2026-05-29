@@ -97,6 +97,42 @@ default:
     python -m pytest tests/test_basic.py -k Sidecar -v
     echo "✅ Sidecar tests passed"
 
+# ── Automated E2E Debug ───────────────────────────────────────────────
+
+# Run automated E2E debug tests (no 3ds Max required)
+# Tests: env → imports → skills → server → executor → bridge → dispatcher → bootstrap → full lifecycle
+@test-e2e:
+    echo "🔍 Running automated E2E debug tests..."
+    python -m pytest tests/test_automated_e2e.py -v --tb=short
+    echo "✅ E2E debug tests passed"
+
+# Run automated E2E with coverage report
+@test-e2e-coverage:
+    echo "🔍 Running automated E2E debug with coverage..."
+    python -m pytest tests/test_automated_e2e.py -v --tb=short --cov=dcc_mcp_3dsmax --cov-report=term-missing
+    echo "✅ E2E debug with coverage complete"
+
+# Full automated debug: setup + verify + e2e tests
+@automated-debug: install-dev verify-deps
+    echo "="
+    echo "🔍 AUTOMATED DEBUG START"
+    echo "="
+    echo "1/4 Environment check..."
+    python -m pytest tests/test_automated_e2e.py -v -k TestEnvironment --tb=short
+    echo ""
+    echo "2/4 Skill validation..."
+    python -m pytest tests/test_automated_e2e.py -v -k TestSkill --tb=short
+    echo ""
+    echo "3/4 Core lifecycle tests..."
+    python -m pytest tests/test_automated_e2e.py -v -k "not TestEnvironment and not TestSkill" --tb=short
+    echo ""
+    echo "4/4 Full integration test..."
+    python -m pytest tests/test_automated_e2e.py -v -k TestFullMcpLifecycle --tb=long
+    echo ""
+    echo "="
+    echo "✅ AUTOMATED DEBUG COMPLETE"
+    echo "="
+
 # Run tests with coverage
 @test-coverage:
     echo "🧪 Running tests with coverage..."

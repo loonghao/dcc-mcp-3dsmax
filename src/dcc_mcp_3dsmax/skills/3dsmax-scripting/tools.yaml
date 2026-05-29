@@ -1,0 +1,62 @@
+tools:
+  - name: execute_python
+    description: >-
+      Execute custom Python code inside the current 3ds Max session with
+      pymxs, rt, and runtime pre-bound. Use only when a typed 3ds Max tool
+      cannot express the requested operation. Returns stdout and either the
+      evaluated expression result or a local variable named result.
+    source_file: action_execute_python.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: Python statements to execute on the 3ds Max main thread.
+        expression:
+          type: string
+          minLength: 1
+          description: Optional Python expression to evaluate after code runs.
+    read_only: false
+    destructive: true
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: true
+
+  - name: execute_maxscript
+    description: >-
+      Execute custom MaxScript in the current 3ds Max session via
+      pymxs.runtime.execute. Use only when a typed 3ds Max tool cannot express
+      the requested operation. Returns the MaxScript result as JSON-safe data
+      plus a string representation.
+    source_file: action_execute_maxscript.py
+    execution: sync
+    affinity: main
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - script
+      properties:
+        script:
+          type: string
+          minLength: 1
+          description: MaxScript code to execute on the 3ds Max main thread.
+    read_only: false
+    destructive: true
+    idempotent: false
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: true

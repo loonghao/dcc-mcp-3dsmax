@@ -34,10 +34,27 @@ from dcc_mcp_core import DccServerOptions, HostExecutionBridge, MinimalModeConfi
 from dcc_mcp_core.server_base import DccServerBase
 
 # Import local modules
-from dcc_mcp_3dsmax import _env, _executor
+from dcc_mcp_3dsmax import (
+    _env,
+    _executor,
+    _project_tools,
+    _qt_inspector,
+    _readiness,
+    _resources,
+    _semantic_index,
+)
 from dcc_mcp_3dsmax.__version__ import __version__
+from dcc_mcp_3dsmax._capability_manifest import (
+    MaxCapabilityManifestBuilder,
+    build_manifest_payload,
+    register_capability_mcp_tool,
+)
 from dcc_mcp_3dsmax._constants import DEFAULT_GATEWAY_PORT
 from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string
+from dcc_mcp_3dsmax.context_snapshot import (
+    MaxContextSnapshotProvider,
+    collect_gateway_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +104,8 @@ class MaxServerOptions:
     # Execution options (new in 0.17+)
     dispatcher: Optional[Any] = None  # BaseDccCallableDispatcher
     execution_bridge: Optional[Any] = None  # HostExecutionBridge
+    # Readiness options (issue parity with Maya #184)
+    readiness_timeout_secs: Optional[int] = None
 
     def to_core_options(self) -> DccServerOptions:
         """Convert to core DccServerOptions using from_env()."""
@@ -173,6 +192,7 @@ class MaxMcpServer(DccServerBase):
         snapshot_provider: Optional[Any] = None,
         dispatcher: Optional[Any] = None,
         execution_bridge: Optional[Any] = None,
+        readiness_timeout_secs: Optional[int] = None,
         options: Optional[MaxServerOptions] = None,
     ) -> None:
         if options is None:
@@ -196,12 +216,25 @@ class MaxMcpServer(DccServerBase):
                 snapshot_provider=snapshot_provider,
                 dispatcher=dispatcher,
                 execution_bridge=execution_bridge,
+                readiness_timeout_secs=readiness_timeout_secs,
             )
 
         super().__init__(options=options.to_core_options())
         self._extra_skill_paths: List[str] = list(options.extra_skill_paths or [])
         self._max_dispatcher: Any = None
         self._execution_bridge: HostExecutionBridge
+
+        # ── Runtime readiness binder (parity with Maya #184) ───────────
+        # Constructed *before* dispatcher attachment so ``attach_dispatcher``
+        # can re-bind through ``self._readiness`` unconditionally.  Bound for
+        # real at the end of ``__init__`` once executor wiring is settled.
+        self._readiness_timeout_secs: Optional[int] = _readiness.resolve_readiness_timeout_secs(
+            options.readiness_timeout_secs
+        )
+        self._readiness: _readiness.ReadinessBinder = _readiness.ReadinessBinder(
+            timeout_secs=self._readiness_timeout_secs,
+        )
+
         if options.execution_bridge is not None:
             self._execution_bridge = options.execution_bridge
             self.register_host_execution_bridge(self._execution_bridge)
@@ -250,6 +283,37 @@ class MaxMcpServer(DccServerBase):
         ):
             self._config.gateway_port = 0
 
+        # ── Context snapshot + capability manifest (parity #163 / #165) ──
+        self._snapshot_provider_impl: MaxContextSnapshotProvider = MaxContextSnapshotProvider()
+        try:
+            self.set_context_snapshot_provider(self._snapshot_provider_impl)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] set_context_snapshot_provider failed: %s", _DCC_NAME, exc)
+
+        self._capability_builder: MaxCapabilityManifestBuilder = MaxCapabilityManifestBuilder(
+            dcc_name=_DCC_NAME,
+            skill_lister=self.list_skills,
+            action_lister=self.list_actions,
+            is_loaded=self.is_skill_loaded,
+            skill_info_lister=self.get_skill_info,
+        )
+
+        # ── Project tools + resources (populated in register_builtin_actions) ──
+        self._project_tools: Optional[_project_tools.ProjectToolsIntegration] = None
+        self._resources: Optional[_resources.MaxResourceBinder] = None
+
+        # ── Bind readiness now the executor/dispatcher state is settled ──
+        self._readiness.bind(self)
+
+        # ── Morphology-aware semantic recall (parity #313) ──────────────
+        try:
+            self._semantic: Optional[_semantic_index.MaxSemanticIndex] = _semantic_index.build_semantic_index()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] semantic index init failed: %s", _DCC_NAME, exc)
+            self._semantic = None
+        if self._semantic is not None:
+            logger.info("[%s] semantic skill recall enabled (embedder=%s)", _DCC_NAME, self._semantic.embedder_kind)
+
         logger.info("[%s] MaxMcpServer initialized (port=%s)", _DCC_NAME, options.port)
 
     def attach_dispatcher(self, dispatcher: Any) -> None:
@@ -257,13 +321,39 @@ class MaxMcpServer(DccServerBase):
         self._max_dispatcher = dispatcher
         self._register_execution_bridge(dispatcher)
 
+        # Re-bind readiness so a late ``attach_dispatcher`` (plugin bootstrap
+        # wiring the dispatcher after ``__init__``) flips ``dispatcher=true``
+        # and schedules the dcc probe on the new dispatcher.
+        readiness = getattr(self, "_readiness", None)
+        if readiness is not None:
+            readiness.bound_server = None  # force re-bind
+            readiness.bind(self)
+
     def _register_execution_bridge(self, dispatcher: Any) -> None:
+        core_dispatcher_attached = self._attach_core_dispatcher(dispatcher)
         self._execution_bridge = HostExecutionBridge(
-            dispatcher=dispatcher,
+            dispatcher=None if core_dispatcher_attached else dispatcher,
             runner=_executor.run_skill_script,
             default_thread_affinity="main",
         )
         self.register_host_execution_bridge(self._execution_bridge)
+        if core_dispatcher_attached:
+            self._dcc_dispatcher = dispatcher
+
+    def _attach_core_dispatcher(self, dispatcher: Any) -> bool:
+        """Attach core Queue/BlockingDispatcher instances to the HTTP main-thread route."""
+        if dispatcher is None:
+            return False
+        attach = getattr(self._server, "attach_dispatcher", None)
+        if not callable(attach):
+            return False
+        try:
+            attach(dispatcher)
+        except (RuntimeError, TypeError) as exc:
+            logger.debug("[%s] Core dispatcher attach skipped: %s", _DCC_NAME, exc)
+            return False
+        logger.info("[%s] Core main-thread dispatcher attached (%s)", _DCC_NAME, type(dispatcher).__name__)
+        return True
 
     # ── 3ds Max version detection ──────────────────────────────────────
 
@@ -313,6 +403,13 @@ class MaxMcpServer(DccServerBase):
                     logger.info("[%s] dispatcher.shutdown signalled %s job(s)", _DCC_NAME, signalled)
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("[%s] Error draining dispatcher during stop(): %s", _DCC_NAME, exc)
+
+        if self._resources is not None:
+            try:
+                self._resources.unbind()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("[%s] resources.unbind failed: %s", _DCC_NAME, exc)
+
         super().stop()
 
     def register_builtin_actions(
@@ -322,7 +419,7 @@ class MaxMcpServer(DccServerBase):
         minimal_mode: Optional["MinimalModeConfig"] = None,
         strict_scan: Optional[bool] = None,
     ) -> "MaxMcpServer":
-        """Discover built-in skills using the core 0.17 composition contract."""
+        """Discover built-in skills + attach 3ds Max-specific core integrations."""
         paths = list(extra_skill_paths or []) + self._extra_skill_paths
         super().register_builtin_actions(
             extra_skill_paths=paths,
@@ -331,7 +428,186 @@ class MaxMcpServer(DccServerBase):
         )
         if _env.resolve_strict_skill_scan(strict_scan):
             self._strict_skill_scan(paths, include_bundled=include_bundled)
+
+        # Optional core integrations — each degrades gracefully and never
+        # raises at startup (parity with the Maya adapter registration phases).
+        self._register_recipes_tools(paths, include_bundled)
+        self._register_skill_reference_docs_tools(paths, include_bundled)
+        self._register_introspect_tools()
+        self._register_feedback_tool()
+        self._register_qt_ui_inspector()
+        self._register_capability_manifest_tool()
+        self._attach_project_tools()
+        self._attach_resources()
         return self
+
+    # ── Optional core integration phases ───────────────────────────────────────
+
+    def _scan_skill_metadata_for_sidecars(
+        self,
+        extra_skill_paths: Optional[List[str]],
+        include_bundled: bool,
+    ) -> List[Any]:
+        """Return ``SkillMetadata`` list aligned with the discovery paths (read-only)."""
+        from dcc_mcp_core import scan_and_load_lenient  # noqa: PLC0415
+
+        paths = self.collect_skill_search_paths(
+            extra_paths=extra_skill_paths,
+            include_bundled=include_bundled,
+            filter_existing=True,
+        )
+        extra = paths if paths else None
+        skills, _skipped = scan_and_load_lenient(extra_paths=extra, dcc_name=_DCC_NAME)
+        return skills
+
+    def _register_recipes_tools(self, extra_skill_paths: Optional[List[str]], include_bundled: bool) -> None:
+        """Register ``recipes__*`` for skills declaring ``metadata.dcc-mcp.recipes``."""
+        try:
+            from dcc_mcp_core.recipes import register_recipes_tools  # noqa: PLC0415
+        except ImportError as exc:
+            logger.debug("[%s] recipes tools skipped (import): %s", _DCC_NAME, exc)
+            return
+        try:
+            skills = self._scan_skill_metadata_for_sidecars(extra_skill_paths, include_bundled)
+            register_recipes_tools(self._server, skills=skills, dcc_name=_DCC_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] recipes tools failed: %s", _DCC_NAME, exc)
+
+    def _register_skill_reference_docs_tools(
+        self,
+        extra_skill_paths: Optional[List[str]],
+        include_bundled: bool,
+    ) -> None:
+        """Register ``skill_refs__*`` for sibling reference docs beside a skill."""
+        try:
+            from dcc_mcp_core.skill_reference_docs import register_skill_reference_docs_tools  # noqa: PLC0415
+        except ImportError as exc:
+            logger.debug("[%s] skill_refs tools skipped (import): %s", _DCC_NAME, exc)
+            return
+        try:
+            skills = self._scan_skill_metadata_for_sidecars(extra_skill_paths, include_bundled)
+            register_skill_reference_docs_tools(self._server, skills=skills, dcc_name=_DCC_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] skill_refs tools failed: %s", _DCC_NAME, exc)
+
+    def _register_introspect_tools(self) -> None:
+        """Register the four ``dcc_introspect__*`` tools (core)."""
+        try:
+            from dcc_mcp_core.introspect import register_introspect_tools  # noqa: PLC0415
+        except ImportError as exc:
+            logger.debug("[%s] introspect tools skipped (import): %s", _DCC_NAME, exc)
+            return
+        try:
+            register_introspect_tools(self._server, dcc_name=_DCC_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] introspect tools failed: %s", _DCC_NAME, exc)
+
+    def _register_feedback_tool(self) -> None:
+        """Register the ``dcc_feedback__report`` MCP tool (core)."""
+        try:
+            from dcc_mcp_core.feedback import register_feedback_tool  # noqa: PLC0415
+        except ImportError as exc:
+            logger.debug("[%s] feedback tool skipped (import): %s", _DCC_NAME, exc)
+            return
+        try:
+            register_feedback_tool(self._server, dcc_name=_DCC_NAME)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] feedback tool failed: %s", _DCC_NAME, exc)
+
+    def _register_qt_ui_inspector(self) -> None:
+        """Adopt the shared core ``qt_ui_inspector__*`` tools (main-thread routed)."""
+        try:
+            _qt_inspector.register_3dsmax_qt_ui_inspector(
+                self._server,
+                dcc_name=_DCC_NAME,
+                dispatcher=self._max_dispatcher,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] qt-ui-inspector registration failed: %s", _DCC_NAME, exc)
+
+    def _register_capability_manifest_tool(self) -> None:
+        """Register the ``dcc_capability_manifest`` MCP tool."""
+        try:
+            register_capability_mcp_tool(self, builder=self._capability_builder)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] capability manifest MCP tool registration failed: %s", _DCC_NAME, exc)
+
+    def _attach_project_tools(self) -> None:
+        """Register the four ``project_*`` MCP tools."""
+        try:
+            self._project_tools = _project_tools.attach_to_server(self)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] project tools registration failed: %s", _DCC_NAME, exc)
+
+    def _attach_resources(self) -> None:
+        """Publish ``scene://current`` + dynamic resource producers."""
+        try:
+            self._resources = _resources.install_resources(
+                self,
+                snapshot_provider=self._snapshot_provider_impl.collect,
+                busy_checker=_executor.is_busy,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] resources registration failed: %s", _DCC_NAME, exc)
+
+    # ── Readiness (parity #184) ────────────────────────────────────────────────
+
+    def readiness_report(self) -> dict:
+        """Return the current three-state readiness snapshot as a dict.
+
+        Keys: ``process`` / ``dispatcher`` / ``dcc`` (all booleans).
+        """
+        return self._readiness.report()
+
+    @property
+    def readiness(self) -> "_readiness.ReadinessBinder":
+        """Expose the :class:`ReadinessBinder` for tests and orchestrators."""
+        return self._readiness
+
+    # ── Gateway capability manifest + metadata (parity #163 / #165) ─────────────
+
+    def build_capability_manifest(self, *, loaded_only: bool = False) -> dict:
+        """Return the compact 3ds Max capability manifest as a dict."""
+        records = self._capability_builder.build()
+        if loaded_only:
+            records = [r for r in records if r.loaded]
+        instance_id = getattr(self, "instance_id", None)
+        scene = getattr(self._config, "scene", None)
+        version = getattr(self._config, "dcc_version", None)
+        return build_manifest_payload(
+            records,
+            dcc_name=_DCC_NAME,
+            dcc_version=version,
+            scene=scene,
+            instance_id=instance_id,
+        )
+
+    def publish_capability_snapshot(self, *, reason: str = "manual") -> bool:
+        """Push current 3ds Max context into the gateway registry (best-effort)."""
+        if not self.is_running:
+            return False
+        gateway_port = getattr(self._config, "gateway_port", 0)
+        if not gateway_port or gateway_port <= 0:
+            return False
+        try:
+            meta = collect_gateway_metadata(self._snapshot_provider_impl)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] capability snapshot: provider failed: %s", _DCC_NAME, exc)
+            return False
+        if not any((meta.get("scene"), meta.get("version"), meta.get("display_name"))):
+            logger.debug("[%s] capability snapshot (%s): skipped — no actionable state", _DCC_NAME, reason)
+            return False
+        try:
+            ok = self.update_gateway_metadata(
+                scene=meta.get("scene"),
+                version=meta.get("version"),
+                documents=meta.get("documents"),
+                display_name=meta.get("display_name"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[%s] update_gateway_metadata failed (%s): %s", _DCC_NAME, reason, exc)
+            return False
+        return bool(ok)
 
     def _strict_skill_scan(
         self,
@@ -424,7 +700,7 @@ class MaxMcpServer(DccServerBase):
         if self._handle is None:
             return []
         try:
-            return list(
+            base = list(
                 self._server.search_skills(
                     query=query,
                     tags=tags or [],
@@ -436,6 +712,16 @@ class MaxMcpServer(DccServerBase):
         except Exception as exc:  # noqa: BLE001
             logger.debug("MaxMcpServer: search_skills failed: %s", exc)
             return []
+
+        # Parity #313: opt-in semantic augmentation. ``base`` ordering is
+        # preserved (promote, never demote); morphology-only recalls append.
+        semantic = getattr(self, "_semantic", None)
+        if semantic is not None and query:
+            try:
+                return semantic.augment(base, query, self.list_skills(), limit=limit)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("[%s] semantic augment failed: %s", _DCC_NAME, exc)
+        return base
 
     def is_skill_loaded(self, skill_name: str) -> bool:
         """Return ``True`` if the named skill is currently loaded."""

@@ -12,7 +12,7 @@ metadata:
     version: "1.0.0"
     layer: domain
     stage: authoring
-    search-hint: "3ds Max create box sphere cylinder plane primitive geometry modeling"
+    search-hint: "3ds Max create box sphere cylinder plane primitive geometry modeling position"
     tags: "3dsmax, modeling, geometry, primitives"
     tools: tools.yaml
 ---

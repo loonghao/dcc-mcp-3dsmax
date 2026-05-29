@@ -30,6 +30,27 @@ tools:
           type: string
           minLength: 1
           description: Optional scene node name for the new box.
+        position:
+          description: Optional XYZ position in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
     read_only: false
     destructive: false
     idempotent: false
@@ -60,6 +81,27 @@ tools:
           type: string
           minLength: 1
           description: Optional scene node name for the new sphere.
+        position:
+          description: Optional XYZ position in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
     read_only: false
     destructive: false
     idempotent: false
@@ -95,6 +137,27 @@ tools:
           type: string
           minLength: 1
           description: Optional scene node name for the new cylinder.
+        position:
+          description: Optional XYZ position in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
     read_only: false
     destructive: false
     idempotent: false
@@ -130,6 +193,27 @@ tools:
           type: string
           minLength: 1
           description: Optional scene node name for the new plane.
+        position:
+          description: Optional XYZ position in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
     read_only: false
     destructive: false
     idempotent: false

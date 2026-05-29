@@ -1,6 +1,7 @@
 """Basic tests for dcc-mcp-3dsmax."""
 
 # Import built-in modules
+import importlib.util
 import os
 import subprocess
 import sys
@@ -9,6 +10,55 @@ from pathlib import Path
 
 # Add src to path for testing
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+
+def _load_action_module(path):
+    spec = importlib.util.spec_from_file_location(path.stem + "_test_module", str(path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakePoint3:
+    def __init__(self, x, y, z):
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
+
+    def __add__(self, other):
+        return _FakePoint3(self.x + other.x, self.y + other.y, self.z + other.z)
+
+
+class _FakeNode:
+    def __init__(self, name="Node", handle=1001):
+        self.name = name
+        self.handle = handle
+        self.pos = _FakePoint3(0, 0, 0)
+
+
+class _FakeRuntime:
+    def __init__(self):
+        self.created = []
+        self.nodes = {}
+        self.selection = []
+        self.executed_script = None
+
+    def Point3(self, x, y, z):  # noqa: N802 - mirrors pymxs runtime naming.
+        return _FakePoint3(x, y, z)
+
+    def Sphere(self, radius=50.0):  # noqa: N802 - mirrors pymxs runtime naming.
+        node = _FakeNode("Sphere{:03d}".format(len(self.created) + 1), 2000 + len(self.created))
+        node.radius = radius
+        self.created.append(node)
+        self.nodes[node.name] = node
+        return node
+
+    def getNodeByName(self, name):  # noqa: N802 - mirrors pymxs runtime naming.
+        return self.nodes.get(name)
+
+    def execute(self, script):
+        self.executed_script = script
+        return {"ok": True, "script": script}
 
 
 class TestImports:
@@ -137,6 +187,28 @@ class TestServerOptions:
 
         assert server._execution_bridge.runner is _executor.run_skill_script
 
+    def test_core_queue_dispatcher_attaches_to_http_main_thread_route(self):
+        """Core QueueDispatcher instances should wire the HTTP DccExecutorHandle path."""
+        from dcc_mcp_core.host import QueueDispatcher
+
+        from dcc_mcp_3dsmax import _executor
+        from dcc_mcp_3dsmax.server import MaxMcpServer, MaxServerOptions
+
+        dispatcher = QueueDispatcher()
+        server = MaxMcpServer(
+            options=MaxServerOptions(
+                port=0,
+                dispatcher=dispatcher,
+                enable_gateway_failover=False,
+                job_storage_path="",
+            )
+        )
+
+        assert server._dcc_dispatcher is dispatcher
+        assert server._execution_bridge.dispatcher is None
+        assert server._execution_bridge.runner is _executor.run_skill_script
+        assert server._inprocess_executor_registered is True
+
     def test_custom_execution_bridge_is_registered(self):
         """Explicit execution bridges are passed through to core registration."""
         from dcc_mcp_core import HostExecutionBridge
@@ -262,6 +334,35 @@ class TestSidecar:
 
         assert max_bootstrap.main() == {"mode": "embedded-runtime"}
         assert calls == ["cleanup", "menu"]
+
+    def test_sidecar_display_name_maps_raw_2024_version(self, monkeypatch):
+        """Admin display-name fallback should map raw maxVersion 26000 to 2024."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        runtime = types.SimpleNamespace(maxVersion=lambda: (26000,))
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+
+        assert max_bootstrap._max_version_label() == "2024"
+
+    def test_embedded_runtime_uses_core_queue_dispatcher(self, monkeypatch):
+        """Default embedded runtime wires core's main-thread dispatcher route."""
+        from dcc_mcp_3dsmax import max_bootstrap
+
+        captured = {}
+        dispatcher = object()
+
+        fake_server_module = types.SimpleNamespace(start_server=lambda **kwargs: captured.update(kwargs) or {"server": True})
+        monkeypatch.setitem(sys.modules, "dcc_mcp_3dsmax.server", fake_server_module)
+        monkeypatch.setattr(max_bootstrap, "start_bridge", lambda bridge_port=None: {"bridge": True})
+        monkeypatch.setattr(max_bootstrap, "_create_core_queue_dispatcher", lambda: dispatcher)
+        monkeypatch.setattr(max_bootstrap, "_install_core_dispatcher_pump", lambda value: captured.setdefault("pump", value))
+
+        result = max_bootstrap.start_embedded_sidecar_bridge()
+
+        assert result["server"] == {"server": True}
+        assert captured["dispatcher"] is dispatcher
+        assert captured["pump"] is dispatcher
+        assert "execution_bridge" not in captured
 
     def test_main_keeps_external_sidecar_as_explicit_mode(self, monkeypatch):
         """Operators can still opt into the process-isolated sidecar mode."""
@@ -587,6 +688,186 @@ class TestSkillMetadata:
             assert dcc_mcp["tools"] == "tools.yaml"
 
 
+class TestSceneAuthoringActions:
+    """Test basic authoring skill actions with a fake pymxs runtime."""
+
+    def test_create_sphere_accepts_position(self, monkeypatch):
+        """Primitive creation tools can place nodes directly."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-modeling"
+            / "action_create_sphere.py"
+        )
+
+        result = action.main(radius=12.0, name="hero_ball", position={"x": 1, "y": 2, "z": 3})
+
+        assert result["success"] is True
+        assert result["data"]["node_name"] == "hero_ball"
+        assert result["data"]["position"] == [1.0, 2.0, 3.0]
+        assert runtime.created[0].pos.x == 1.0
+
+    def test_set_node_position_updates_existing_node(self, monkeypatch):
+        """Transform skill sets absolute node positions."""
+        runtime = _FakeRuntime()
+        runtime.nodes["hero_ball"] = _FakeNode("hero_ball", 42)
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-transform"
+            / "action_set_node_position.py"
+        )
+
+        result = action.main(node_name="hero_ball", position=[10, 20, 30])
+
+        assert result["success"] is True
+        assert result["data"]["position"] == [10.0, 20.0, 30.0]
+        assert runtime.nodes["hero_ball"].pos.z == 30.0
+
+    def test_move_nodes_offsets_named_nodes(self, monkeypatch):
+        """Transform skill moves nodes by a relative offset."""
+        runtime = _FakeRuntime()
+        node = _FakeNode("hero_ball", 42)
+        node.pos = _FakePoint3(10, 20, 30)
+        runtime.nodes["hero_ball"] = node
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-transform"
+            / "action_move_nodes.py"
+        )
+
+        result = action.main(node_names=["hero_ball"], offset={"x": 1, "y": -2, "z": 3})
+
+        assert result["success"] is True
+        assert result["data"]["nodes"][0]["position"] == [11.0, 18.0, 33.0]
+
+    def test_execute_python_returns_stdout_and_result(self, monkeypatch):
+        """Scripting skill exposes pymxs and returns JSON-safe output."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-scripting"
+            / "action_execute_python.py"
+        )
+
+        result = action.main("print('hello from max')\nresult = {'node_count': len(rt.nodes)}")
+
+        assert result["success"] is True
+        assert result["data"]["stdout"] == "hello from max\n"
+        assert result["data"]["result"] == {"node_count": 0}
+
+    def test_execute_python_honors_disable_env(self, monkeypatch):
+        """Python execution can be disabled for locked-down deployments."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        monkeypatch.setenv("DCC_MCP_3DSMAX_DISABLE_EXECUTE_PYTHON", "1")
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-scripting"
+            / "action_execute_python.py"
+        )
+
+        result = action.main("result = 1")
+
+        assert result["status"] == "error"
+        assert "disabled" in result["message"]
+
+    def test_execute_maxscript_delegates_to_runtime_execute(self, monkeypatch):
+        """Scripting skill executes MaxScript through pymxs.runtime.execute."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-scripting"
+            / "action_execute_maxscript.py"
+        )
+
+        result = action.main("selection.count")
+
+        assert result["success"] is True
+        assert runtime.executed_script == "selection.count"
+        assert result["data"]["result"] == {"ok": True, "script": "selection.count"}
+
+    def test_execute_maxscript_honors_arbitrary_script_disable_env(self, monkeypatch):
+        """The shared arbitrary-script guard blocks MaxScript too."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        monkeypatch.setenv("DCC_MCP_3DSMAX_DISABLE_ARBITRARY_SCRIPT", "true")
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-scripting"
+            / "action_execute_maxscript.py"
+        )
+
+        result = action.main("selection.count")
+
+        assert result["status"] == "error"
+        assert "disabled" in result["message"]
+
+    def test_capture_viewport_writes_to_requested_image_path(self, tmp_path, monkeypatch):
+        """Viewport skill emits a MaxScript capture script for README-ready images."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-viewport"
+            / "action_capture_viewport.py"
+        )
+        output = tmp_path / "viewport.png"
+
+        result = action.main(str(output))
+
+        assert result["success"] is True
+        assert result["data"]["file_path"] == str(output)
+        assert "gw.getViewportDib()" in runtime.executed_script
+        assert str(output).replace("\\", "/") in runtime.executed_script
+
+    def test_capture_viewport_rejects_non_image_path(self, monkeypatch):
+        """Viewport capture only writes known image extensions."""
+        runtime = _FakeRuntime()
+        monkeypatch.setitem(sys.modules, "pymxs", types.SimpleNamespace(runtime=runtime))
+        action = _load_action_module(
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "dcc_mcp_3dsmax"
+            / "skills"
+            / "3dsmax-viewport"
+            / "action_capture_viewport.py"
+        )
+
+        result = action.main("notes.txt")
+
+        assert result["status"] == "error"
+        assert "file_path must end" in result["message"]
+
+
 class TestVersion:
     """Test version detection."""
 
@@ -656,6 +937,19 @@ class TestVersion:
 
         assert get_3dsmax_version_string is not None
         assert is_3dsmax_available is not None
+
+    def test_version_probe_reports_2024_from_raw_26000(self, monkeypatch):
+        """3ds Max 2024 reports raw major version 26000."""
+        from dcc_mcp_3dsmax._version_probe import get_3dsmax_version_string
+
+        pymxs = types.SimpleNamespace(
+            runtime=types.SimpleNamespace(
+                maxVersion=lambda: (26000, 64, 0, 26, 2, 11, 20199, 2024),
+            )
+        )
+        monkeypatch.setitem(sys.modules, "pymxs", pymxs)
+
+        assert get_3dsmax_version_string() == "2024"
 
     def test_version_string_not_crash(self):
         """Test that version detection doesn't crash."""
