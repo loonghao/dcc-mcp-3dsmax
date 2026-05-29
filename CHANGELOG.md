@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.9](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.8...v0.1.9) (2026-05-29)
+
+
+### Features
+
+* add latest dcc-mcp-core integrations, new skills, and agent install ([14107c8](https://github.com/loonghao/dcc-mcp-3dsmax/commit/14107c8c4a3a3b012bc7fa3d2b056188873b65ca))
+* latest dcc-mcp-core integrations, new skills + agent install ([11bba84](https://github.com/loonghao/dcc-mcp-3dsmax/commit/11bba84263507554629e3ceb973deeb38bf7d0a1))
+* latest dcc-mcp-core integrations, new skills + agent install ([#54](https://github.com/loonghao/dcc-mcp-3dsmax/issues/54)) ([11bba84](https://github.com/loonghao/dcc-mcp-3dsmax/commit/11bba84263507554629e3ceb973deeb38bf7d0a1))
+
+
+### Bug Fixes
+
+* normalize status→success in _run_skill_script, fix test/server API mismatches ([6148bfe](https://github.com/loonghao/dcc-mcp-3dsmax/commit/6148bfefab4222953fb0b1c943e345d755317156))
+
 ## [0.1.8](https://github.com/loonghao/dcc-mcp-3dsmax/compare/v0.1.7...v0.1.8) (2026-05-26)
 
 
