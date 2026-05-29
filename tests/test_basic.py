@@ -597,7 +597,7 @@ class TestSidecar:
         script.write_text("def main(value=None):\n    return {'success': True, 'data': {'value': value}}\n", encoding="utf-8")
 
         server = start_qt_bridge()
-        port = int(server.server_address[1])
+        port = int(server.port)
         try:
             payload = {
                 "id": "req-1",

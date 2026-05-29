@@ -7,7 +7,6 @@ tools:
     source_file: action_capture_viewport.py
     execution: sync
     affinity: main
-    timeout_hint_secs: 10
     input_schema:
       type: object
       additionalProperties: false
@@ -16,6 +15,19 @@ tools:
           type: string
           minLength: 1
           description: Optional output PNG path. Defaults to the system temp directory.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 10
     read_only: true
     destructive: false
     idempotent: false

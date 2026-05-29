@@ -74,9 +74,11 @@ def _install_fake_pymxs(monkeypatch):
 
 SKILLS_DIR = Path(__file__).parent.parent / "src" / "dcc_mcp_3dsmax" / "skills"
 EXPECTED_SKILLS = {
-    "3dsmax-animation", "3dsmax-materials", "3dsmax-modeling",
+    "3dsmax-animation", "3dsmax-camera-lighting", "3dsmax-display",
+    "3dsmax-geometry-io", "3dsmax-materials", "3dsmax-mesh-ops",
+    "3dsmax-modeling", "3dsmax-render", "3dsmax-rigging",
     "3dsmax-scene", "3dsmax-scripting", "3dsmax-transform",
-    "3dsmax-viewport",
+    "3dsmax-uv-atlas", "3dsmax-validation", "3dsmax-viewport",
 }
 
 

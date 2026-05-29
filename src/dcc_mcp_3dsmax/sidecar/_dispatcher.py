@@ -107,9 +107,14 @@ def _resolve_action_source(action_name: str, *, server: Any = None, payload: Any
 
 def _run_skill_script(request: Any) -> Any:
     result = _executor.run_skill_script(request.script_path, request.args)
-    if isinstance(result, Mapping) and result.get("status") == "error" and "success" not in result:
+    if isinstance(result, Mapping):
         result = dict(result)
-        result["success"] = False
+        if "success" not in result:
+            status = result.get("status")
+            if status == "error":
+                result["success"] = False
+            elif status == "success":
+                result["success"] = True
     return result
 
 
