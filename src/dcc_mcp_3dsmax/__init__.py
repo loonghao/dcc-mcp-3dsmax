@@ -40,9 +40,21 @@ from dcc_mcp_3dsmax._env import (
     ENV_DISABLE_EXECUTE_MAXSCRIPT,
     ENV_DISABLE_EXECUTE_PYTHON,
     ENV_ENABLE_GATEWAY_FAILOVER,
+    ENV_PROJECT_TOOLS,
+    ENV_QT_UI_INSPECTOR,
+    ENV_READINESS_TIMEOUT_SECS,
+    ENV_RESOURCES,
+    ENV_SEMANTIC_EMBEDDER,
+    ENV_SEMANTIC_INDEX,
     resolve_enable_gateway_failover,
     resolve_execute_maxscript_disabled,
     resolve_execute_python_disabled,
+    resolve_project_tools_enabled,
+    resolve_qt_ui_inspector_enabled,
+    resolve_readiness_timeout_secs,
+    resolve_resources_enabled,
+    resolve_semantic_embedder_kind,
+    resolve_semantic_index_enabled,
 )
 from dcc_mcp_3dsmax._version_probe import (
     get_3dsmax_version_number,
@@ -87,6 +99,29 @@ _LAZY_EXPORTS = {
     "DEFAULT_GATEWAY_PORT": ("dcc_mcp_3dsmax.server", "DEFAULT_GATEWAY_PORT"),
     "DEFAULT_PORT": ("dcc_mcp_3dsmax.server", "DEFAULT_PORT"),
     "SERVER_NAME": ("dcc_mcp_3dsmax.server", "SERVER_NAME"),
+    # Readiness (parity #184)
+    "ReadinessBinder": ("dcc_mcp_3dsmax._readiness", "ReadinessBinder"),
+    "install_readiness": ("dcc_mcp_3dsmax._readiness", "install_readiness"),
+    "wait_until_ready": ("dcc_mcp_3dsmax._readiness", "wait_until_ready"),
+    # Capability manifest + context snapshot (parity #163 / #165)
+    "MaxCapabilityManifestBuilder": ("dcc_mcp_3dsmax._capability_manifest", "MaxCapabilityManifestBuilder"),
+    "CapabilityRecord": ("dcc_mcp_3dsmax._capability_manifest", "CapabilityRecord"),
+    "build_manifest_payload": ("dcc_mcp_3dsmax._capability_manifest", "build_manifest_payload"),
+    "register_capability_mcp_tool": ("dcc_mcp_3dsmax._capability_manifest", "register_capability_mcp_tool"),
+    "MaxContextSnapshotProvider": ("dcc_mcp_3dsmax.context_snapshot", "MaxContextSnapshotProvider"),
+    "collect_gateway_metadata": ("dcc_mcp_3dsmax.context_snapshot", "collect_gateway_metadata"),
+    "make_snapshot_provider": ("dcc_mcp_3dsmax.context_snapshot", "make_snapshot_provider"),
+    # Resources (parity #187)
+    "MaxResourceBinder": ("dcc_mcp_3dsmax._resources", "MaxResourceBinder"),
+    "install_resources": ("dcc_mcp_3dsmax._resources", "install_resources"),
+    # Project tools (parity #576)
+    "ProjectToolsIntegration": ("dcc_mcp_3dsmax._project_tools", "ProjectToolsIntegration"),
+    "MaxSceneResolver": ("dcc_mcp_3dsmax._project_tools", "MaxSceneResolver"),
+    # Qt UI inspector (parity #307)
+    "register_3dsmax_qt_ui_inspector": ("dcc_mcp_3dsmax._qt_inspector", "register_3dsmax_qt_ui_inspector"),
+    # Semantic index (parity #313)
+    "MaxSemanticIndex": ("dcc_mcp_3dsmax._semantic_index", "MaxSemanticIndex"),
+    "build_semantic_index": ("dcc_mcp_3dsmax._semantic_index", "build_semantic_index"),
 }
 
 
@@ -150,7 +185,42 @@ __all__ = [
     "ENV_DISABLE_EXECUTE_MAXSCRIPT",
     "ENV_DISABLE_ARBITRARY_SCRIPT",
     "ENV_ENABLE_GATEWAY_FAILOVER",
+    "ENV_READINESS_TIMEOUT_SECS",
+    "ENV_RESOURCES",
+    "ENV_PROJECT_TOOLS",
+    "ENV_QT_UI_INSPECTOR",
+    "ENV_SEMANTIC_INDEX",
+    "ENV_SEMANTIC_EMBEDDER",
     "resolve_enable_gateway_failover",
     "resolve_execute_python_disabled",
     "resolve_execute_maxscript_disabled",
+    "resolve_readiness_timeout_secs",
+    "resolve_resources_enabled",
+    "resolve_project_tools_enabled",
+    "resolve_qt_ui_inspector_enabled",
+    "resolve_semantic_index_enabled",
+    "resolve_semantic_embedder_kind",
+    # Readiness (parity #184)
+    "ReadinessBinder",
+    "install_readiness",
+    "wait_until_ready",
+    # Capability manifest + context snapshot (parity #163 / #165)
+    "MaxCapabilityManifestBuilder",
+    "CapabilityRecord",
+    "build_manifest_payload",
+    "register_capability_mcp_tool",
+    "MaxContextSnapshotProvider",
+    "collect_gateway_metadata",
+    "make_snapshot_provider",
+    # Resources (parity #187)
+    "MaxResourceBinder",
+    "install_resources",
+    # Project tools (parity #576)
+    "ProjectToolsIntegration",
+    "MaxSceneResolver",
+    # Qt UI inspector (parity #307)
+    "register_3dsmax_qt_ui_inspector",
+    # Semantic index (parity #313)
+    "MaxSemanticIndex",
+    "build_semantic_index",
 ]

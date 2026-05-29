@@ -1,0 +1,130 @@
+tools:
+  - name: set_node_position
+    description: >-
+      Set one existing 3ds Max node to an absolute XYZ position. Use when the
+      user asks to place, position, or move an object to exact coordinates.
+      Returns the node identity and final position.
+    source_file: action_set_node_position.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - node_name
+        - position
+      properties:
+        node_name:
+          type: string
+          minLength: 1
+          description: Name of the node to position.
+        position:
+          description: Absolute XYZ position in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
+    read_only: false
+    destructive: false
+    idempotent: true
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 10
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+
+  - name: move_nodes
+    description: >-
+      Move named nodes, selected nodes, or both by a relative XYZ offset. Use
+      when the user asks to move, translate, offset, nudge, or shift existing
+      objects. Returns each moved node identity and final position.
+    source_file: action_move_nodes.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      required:
+        - offset
+      properties:
+        node_names:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
+          description: Optional node names to move.
+        selected:
+          type: boolean
+          default: false
+          description: Move the current 3ds Max selection in addition to node_names.
+        offset:
+          description: Relative XYZ offset in current scene units.
+          oneOf:
+            - type: array
+              minItems: 3
+              maxItems: 3
+              items:
+                type: number
+            - type: object
+              additionalProperties: false
+              required:
+                - x
+                - y
+                - z
+              properties:
+                x:
+                  type: number
+                y:
+                  type: number
+                z:
+                  type: number
+    read_only: false
+    destructive: false
+    idempotent: false
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 10
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false

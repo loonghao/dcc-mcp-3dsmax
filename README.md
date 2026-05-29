@@ -12,6 +12,18 @@
 - **Job Persistence**: SQLite-based job storage for long-running operations
 - **Prometheus Metrics**: Optional `/metrics` endpoint for monitoring
 
+## Agent install (recommended)
+
+The fastest way to install is to let your AI agent do it. In Cursor, Claude, or
+any MCP-capable agent host, ask:
+
+> 帮我参考 loonghao/dcc-mcp-3dsmax/install.md 去安装
+
+The agent reads [`install.md`](install.md), runs the setup script against your
+3ds Max `3dsmaxpy.exe`, generates the MCP host config, guides you through
+starting the runtime in 3ds Max, and runs a live smoke prompt to confirm the
+connection.
+
 ## Installation
 
 ```bash

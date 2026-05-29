@@ -1,0 +1,38 @@
+tools:
+  - name: capture_viewport
+    description: >-
+      Capture the active 3ds Max viewport to a PNG file. Use when the user asks
+      for a screenshot, visual proof of a scene edit, or a README-ready image.
+      Returns the image path.
+    source_file: action_capture_viewport.py
+    execution: sync
+    affinity: main
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        file_path:
+          type: string
+          minLength: 1
+          description: Optional output PNG path. Defaults to the system temp directory.
+    output_schema:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        status:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+    timeout_hint_secs: 10
+    read_only: true
+    destructive: false
+    idempotent: false
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: true

@@ -42,6 +42,18 @@ ENV_DISABLE_EXECUTE_PYTHON = "DCC_MCP_3DSMAX_DISABLE_EXECUTE_PYTHON"
 ENV_DISABLE_ARBITRARY_SCRIPT = "DCC_MCP_3DSMAX_DISABLE_ARBITRARY_SCRIPT"
 #: Optional per-tool opt-out for MAXScript
 ENV_DISABLE_EXECUTE_MAXSCRIPT = "DCC_MCP_3DSMAX_DISABLE_EXECUTE_MAXSCRIPT"
+#: Advisory readiness timeout (positive int seconds) for ``/v1/readyz``.
+ENV_READINESS_TIMEOUT_SECS = "DCC_MCP_3DSMAX_READINESS_TIMEOUT_SECS"
+#: ``"0"`` disables ``scene://current`` + dynamic resource producers.
+ENV_RESOURCES = "DCC_MCP_3DSMAX_RESOURCES"
+#: ``"0"`` disables the four ``project_*`` MCP tools.
+ENV_PROJECT_TOOLS = "DCC_MCP_3DSMAX_PROJECT_TOOLS"
+#: Falsey token skips the shared ``qt_ui_inspector__*`` tools.
+ENV_QT_UI_INSPECTOR = "DCC_MCP_3DSMAX_QT_UI_INSPECTOR"
+#: ``"1"`` enables morphology-aware semantic recall in ``search_skills``.
+ENV_SEMANTIC_INDEX = "DCC_MCP_3DSMAX_SEMANTIC_INDEX"
+#: ``hashed`` (default) or ``onnx`` embedder for the semantic index.
+ENV_SEMANTIC_EMBEDDER = "DCC_MCP_3DSMAX_SEMANTIC_EMBEDDER"
 #: Default SQLite filename inside the platform data directory.
 DEFAULT_JOB_DB_FILENAME = "jobs.db"
 
@@ -159,3 +171,51 @@ def resolve_3dsmax_version() -> Optional[str]:
     """Resolve 3ds Max version from environment."""
     version = os.environ.get(ENV_3DSMAX_VERSION, "").strip()
     return version if version else None
+
+
+# ── Optional core-integration toggles ───────────────────────────────────────
+# Thin wrappers that delegate to each feature module so a single registry of
+# ``DCC_MCP_3DSMAX_*`` names lives here while resolution logic stays beside the
+# feature it gates.
+
+
+def resolve_readiness_timeout_secs(timeout_secs: Optional[int] = None) -> Optional[int]:
+    """Resolve the advisory readiness timeout (positive int seconds, or ``None``)."""
+    from dcc_mcp_3dsmax._readiness import resolve_readiness_timeout_secs as _resolve  # noqa: PLC0415
+
+    return _resolve(timeout_secs)
+
+
+def resolve_resources_enabled(flag: Optional[bool] = None) -> bool:
+    """Resolve whether ``scene://current`` resource wiring should run."""
+    from dcc_mcp_3dsmax._resources import resolve_enabled as _resolve  # noqa: PLC0415
+
+    return _resolve(flag)
+
+
+def resolve_project_tools_enabled(flag: Optional[bool] = None) -> bool:
+    """Resolve whether the four ``project_*`` MCP tools should be registered."""
+    from dcc_mcp_3dsmax._project_tools import resolve_enabled as _resolve  # noqa: PLC0415
+
+    return _resolve(flag)
+
+
+def resolve_qt_ui_inspector_enabled() -> bool:
+    """Resolve whether the shared ``qt_ui_inspector__*`` tools should register."""
+    from dcc_mcp_3dsmax._qt_inspector import resolve_qt_ui_inspector_enabled as _resolve  # noqa: PLC0415
+
+    return _resolve()
+
+
+def resolve_semantic_index_enabled() -> bool:
+    """Resolve whether opt-in semantic recall augments ``search_skills``."""
+    from dcc_mcp_3dsmax._semantic_index import resolve_semantic_index_enabled as _resolve  # noqa: PLC0415
+
+    return _resolve()
+
+
+def resolve_semantic_embedder_kind() -> str:
+    """Resolve the semantic embedder kind: ``"hashed"`` (default) or ``"onnx"``."""
+    from dcc_mcp_3dsmax._semantic_index import resolve_embedder_kind as _resolve  # noqa: PLC0415
+
+    return _resolve()

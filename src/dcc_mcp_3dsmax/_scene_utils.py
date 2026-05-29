@@ -7,6 +7,44 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Dict, List, Optional, Tuple
 
 
+def coerce_vector3(value: Any, name: str) -> Optional[List[float]]:
+    """Normalize a 3D vector from ``[x, y, z]`` or ``{"x": ..., ...}``."""
+    if value is None:
+        return None
+
+    if isinstance(value, Mapping):
+        raw = [value.get("x"), value.get("y"), value.get("z")]
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        raw = list(value)
+    else:
+        raise ValueError("{} must be an object with x/y/z or a 3-item array".format(name))
+
+    if len(raw) != 3 or any(item is None for item in raw):
+        raise ValueError("{} must contain exactly x, y, and z values".format(name))
+
+    try:
+        return [float(raw[0]), float(raw[1]), float(raw[2])]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("{} values must be numbers".format(name)) from exc
+
+
+def make_point3(runtime: Any, value: Any, name: str = "position") -> Optional[Any]:
+    """Create a pymxs Point3 from user input."""
+    vector = coerce_vector3(value, name)
+    if vector is None:
+        return None
+    return runtime.Point3(vector[0], vector[1], vector[2])
+
+
+def set_node_position(runtime: Any, node: Any, position: Any) -> Optional[List[float]]:
+    """Apply a position to a 3ds Max node and return the normalized vector."""
+    vector = coerce_vector3(position, "position")
+    if vector is None:
+        return None
+    node.pos = runtime.Point3(vector[0], vector[1], vector[2])
+    return vector
+
+
 def json_safe(value: Any, depth: int = 0) -> Any:
     """Best-effort conversion of pymxs/Python values into JSON-safe data."""
     if depth > 4:
