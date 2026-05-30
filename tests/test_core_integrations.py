@@ -378,6 +378,38 @@ def test_resources_publish_scene_explicit_payload():
 
 
 # ===========================================================================
+# Regression: issue #50 — dispatcher + execution_bridge not both passed
+# ===========================================================================
+
+
+def test_startup_passes_only_one_execution_mode(monkeypatch):
+    """Core 0.17.36+ rejects dispatcher+execution_bridge set simultaneously."""
+    from dcc_mcp_core import HostExecutionBridge
+
+    from dcc_mcp_3dsmax.dispatcher import MaxUiDispatcher
+    from dcc_mcp_3dsmax.server import MaxMcpServer, MaxServerOptions
+
+    dispatcher = MaxUiDispatcher()
+    bridge = HostExecutionBridge(
+        dispatcher=dispatcher,
+        runner=lambda p, a: {"success": True},
+        default_thread_affinity="main",
+    )
+    # This MUST NOT raise ValueError("Pass either dispatcher or execution_bridge, not both")
+    server = MaxMcpServer(
+        options=MaxServerOptions(
+            port=0,
+            dispatcher=dispatcher,
+            execution_bridge=bridge,
+            enable_gateway_failover=False,
+            job_storage_path="",
+        )
+    )
+    assert server._execution_bridge is bridge
+    assert server._inprocess_executor_registered is True
+
+
+# ===========================================================================
 # Semantic augmentation
 # ===========================================================================
 

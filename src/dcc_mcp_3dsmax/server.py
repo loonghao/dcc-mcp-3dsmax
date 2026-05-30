@@ -134,7 +134,8 @@ class MaxServerOptions:
             dcc_window_handle=self.dcc_window_handle,
             snapshot_provider=self.snapshot_provider,
             # Execution kwargs (new in 0.17+)
-            dispatcher=self.dispatcher,
+            # Core 0.17.36+ rejects both set; pass only one.
+            dispatcher=None if self.execution_bridge is not None else self.dispatcher,
             execution_bridge=self.execution_bridge,
         )
 
